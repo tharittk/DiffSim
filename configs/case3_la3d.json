@@ -1,0 +1,66 @@
+{
+  "name": "case3_la3d",
+  "type": "3d",
+  "image_size": [32, 48, 48],
+
+  "unconditional": {
+    "timesteps": 1500,
+    "channels": 1,
+    "dim": 64,
+    "dim_mults": [1, 2, 4],
+    "beta_schedule": "linear",
+    "training": {
+      "epochs": 200,
+      "batch_size": 32,
+      "lr": 1e-4,
+      "loss": "huber"
+    }
+  },
+
+  "conditional": {
+    "timesteps": 1500,
+    "in_channel": 6,
+    "out_channel": 1,
+    "inner_channel": 64,
+    "channel_mults": [1, 2, 4, 8],
+    "attn_res": [16],
+    "num_head_channels": 32,
+    "res_blocks": 2,
+    "dropout": 0.2,
+    "module_name": "guided_diffusion_3d",
+    "predict_type": "x_start",
+    "beta_schedule": {
+      "train": {
+        "schedule": "cosine",
+        "n_timestep": 1500,
+        "linear_start": 1e-6,
+        "linear_end": 0.01
+      },
+      "test": {
+        "schedule": "cosine",
+        "n_timestep": 1500,
+        "linear_start": 1e-4,
+        "linear_end": 0.09
+      }
+    },
+    "training": {
+      "epochs": 1000,
+      "batch_size": 16,
+      "lr": 5e-5,
+      "loss": "mse",
+      "ema_decay": 0.9999
+    }
+  },
+
+  "data": {
+    "train_path": "path/to/train/data",
+    "mask_path": "path/to/masks",
+    "test_image_path": "/scratch/users/minghuix/1_ModelData3D_4832/test",
+    "test_mask_path": "/scratch/users/minghuix/1_ModelData3D_4832/test_mask"
+  },
+
+  "checkpoints": {
+    "unconditional": "checkpoints/case3_la3d/unconditional.pth",
+    "conditional": "checkpoints/case3_la3d/conditional.pth"
+  }
+}

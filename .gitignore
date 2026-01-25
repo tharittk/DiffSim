@@ -1,0 +1,55 @@
+# Checkpoints
+checkpoints/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Environment
+.env
+venv/
+.venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+runs/
+
+# Results and model outputs
+results/
+model/
+
+# Large files
+*.zip
+*.tar.gz
+*.tar
+*.npy
+*.pth
+*.pt
+
+# Data directories (user should configure)
+/data/
+
+# Tensorboard
+events.out.tfevents.*
+.git_backup/
