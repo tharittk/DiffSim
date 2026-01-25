@@ -139,6 +139,10 @@ Each case has a JSON configuration file in `configs/` with the following structu
 | case2_muddrape | `dim=64, channels=1, dim_mults=(1,2,4)` | `in_channel=6, out_channel=1, channel_mults=[1,2,4]` |
 | case3_la3d | `dim=64, channels=1, dim_mults=(1,2,4)` | `in_channel=6, out_channel=1, channel_mults=[1,2,4,8]` |
 
+## Poster
+
+📄 [Workshop Poster (PDF)](assets/Poster3_Workshop.pdf)
+
 ## License
 
 [Your License Here]
