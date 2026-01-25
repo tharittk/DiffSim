@@ -1,5 +1,7 @@
 # DiffSim: Diffusion Models for Geomodelling
 
+![Workshop Poster](assets/Poster3_Workshop.png)
+
 Unconditional and conditional diffusion models for geological facies modeling.
 
 ## Overview
@@ -138,10 +140,6 @@ Each case has a JSON configuration file in `configs/` with the following structu
 | case1_geomodeling | `dim=64, channels=1, dim_mults=(1,2,4), timesteps=1500` | `in_channel=5, out_channel=1, channel_mults=[1,2,4]` |
 | case2_muddrape | `dim=64, channels=1, dim_mults=(1,2,4)` | `in_channel=6, out_channel=1, channel_mults=[1,2,4]` |
 | case3_la3d | `dim=64, channels=1, dim_mults=(1,2,4)` | `in_channel=6, out_channel=1, channel_mults=[1,2,4,8]` |
-
-## Poster
-
-📄 [Workshop Poster (PDF)](assets/Poster3_Workshop.pdf)
 
 ## License
 
