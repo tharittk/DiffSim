@@ -11,6 +11,7 @@ Supports both 2D and 3D cases based on config["type"].
 import argparse
 import json
 import os
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -60,18 +61,30 @@ def main(config_path):
         beta_schedule=uncond["beta_schedule"]
     )
 
-    # Setup output directories
+    # Setup output directories with timestamp (from config or default)
     exp_name = config["name"]
-    results_dir = Path(f"./results/{exp_name}")
-    model_dir = Path(f"./model/{exp_name}")
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_name = f"{exp_name}_{timestamp}"
+    
+    output_cfg = uncond.get("output", {})
+    base_results_dir = Path(output_cfg.get("results_dir", f"./results/{exp_name}"))
+    base_model_dir = Path(output_cfg.get("model_dir", f"./model/{exp_name}"))
+    
+    # Add timestamp subdirectory
+    results_dir = base_results_dir / timestamp
+    model_dir = base_model_dir / timestamp
     results_dir.mkdir(parents=True, exist_ok=True)
     model_dir.mkdir(parents=True, exist_ok=True)
 
-    # Setup tensorboard
-    writer = SummaryWriter(log_dir=str(results_dir / "logs"))
+    # Setup tensorboard with timestamp
+    base_log_dir = Path(output_cfg.get("log_dir", str(base_results_dir / "logs")))
+    log_dir = base_log_dir / timestamp
+    log_dir.mkdir(parents=True, exist_ok=True)
+    writer = SummaryWriter(log_dir=str(log_dir))
 
-    # Setup dataset
-    data_path = config["data"]["train_path"]
+    # Setup dataset (from unconditional.data or legacy config.data)
+    data_cfg = uncond.get("data", config.get("data", {}))
+    data_path = data_cfg.get("train", data_cfg.get("train_path", ""))
     if is_3d:
         image_size = config["image_size"]  # List [D, H, W]
         dataset = NPYDataset(folder=data_path, max_files=12000)
@@ -91,20 +104,28 @@ def main(config_path):
         pin_memory=True
     )
 
+    # Print data info
+    print(f"Data path: {data_path}")
+    print(f"Dataset size: {len(dataset)} samples")
+    print(f"Batches per epoch: {len(dataloader)}")
+
     # Setup optimizer and scheduler
     optimizer = Adam(model.parameters(), lr=train_cfg["lr"])
     scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=10, factor=0.5)
 
     # Training loop
     epochs = train_cfg["epochs"]
+    save_every = train_cfg.get("save_every", 500)
+    checkpoint_every = train_cfg.get("checkpoint_every", 10)
     min_loss = float('inf')
     best_model_state = None
     best_epoch = 0
-    save_every = 500
 
     print(f"Starting training for {exp_name}")
+    print(f"Run ID: {timestamp}")
     print(f"Model type: {'3D' if is_3d else '2D'}")
     print(f"Epochs: {epochs}, Batch size: {train_cfg['batch_size']}")
+    print(f"Save samples every: {save_every} steps, Checkpoint every: {checkpoint_every} epochs")
     print(f"Device: {device}")
 
     for epoch in range(epochs):
@@ -132,7 +153,7 @@ def main(config_path):
             writer.add_scalar('Learning_rate', optimizer.param_groups[0]['lr'], global_step)
 
             if global_step % 100 == 0:
-                print(f"Epoch {epoch}, Step {step}: Loss = {loss.item():.6f}")
+                print(f"Epoch {epoch}, Global Step {global_step}: Loss = {loss.item():.6f}")
 
             # Save samples periodically
             if global_step != 0 and global_step % save_every == 0:
@@ -142,10 +163,10 @@ def main(config_path):
                         samples = diffusion.sample(model, image_size, batch_size=4, channels=uncond["channels"])
                         # Save middle slice
                         mid_slice = samples[:, :, image_size[0] // 2]
-                        save_image(mid_slice, str(results_dir / f'sample_{epoch}_{global_step}.png'), nrow=2)
+                        save_image(mid_slice, str(results_dir / f'sample_{epoch}_{global_step}.png'), nrow=2, normalize=True, value_range=(0, 1))
                     else:
                         samples = diffusion.sample(model, image_size, batch_size=16, channels=uncond["channels"])
-                        save_image(samples, str(results_dir / f'sample_{epoch}_{global_step}.png'), nrow=4)
+                        save_image(samples, str(results_dir / f'sample_{epoch}_{global_step}.png'), nrow=4, normalize=True, value_range=(0, 1))
                 model.train()
 
         # Update best model
@@ -159,7 +180,7 @@ def main(config_path):
                 f.write(str(best_epoch))
 
         # Save checkpoint
-        if epoch % 10 == 0:
+        if epoch % checkpoint_every == 0:
             torch.save(model.state_dict(), str(model_dir / f'model_epoch_{epoch:03d}.pth'))
 
         scheduler.step(avg_loss)
@@ -178,7 +199,9 @@ def main(config_path):
         save_image(
             final_samples if not is_3d else final_samples[:, :, image_size[0] // 2],
             str(results_dir / 'final_samples.png'),
-            nrow=8
+            nrow=8,
+            normalize=True,
+            value_range=(0, 1)
         )
 
     writer.close()

@@ -1,12 +1,24 @@
-torch>=1.10.0
-torchvision>=0.11.0
-numpy
-matplotlib
-Pillow
-tqdm
-tensorboard
-tensorboardX
-scipy
-scikit-image
-einops
-pandas
+# PyTorch (install via conda or pip with CUDA support)
+# conda: conda install pytorch torchvision pytorch-cuda=12.1 -c pytorch -c nvidia
+# pip: pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+torch>=2.0.0
+torchvision>=0.15.0
+
+# Core dependencies
+numpy>=1.24.0
+scipy>=1.10.0
+pandas>=2.0.0
+
+# Visualization
+matplotlib>=3.7.0
+Pillow>=9.0.0
+
+# Deep learning utilities
+einops>=0.7.0
+tqdm>=4.65.0
+
+# Logging
+tensorboardX>=2.6.0
+
+# Image processing
+scikit-image>=0.21.0

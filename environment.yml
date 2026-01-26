@@ -1,0 +1,22 @@
+name: diffsim
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.12
+  - pytorch>=2.0.0
+  - torchvision>=0.15.0
+  - pytorch-cuda=12.1
+  - numpy>=1.24.0
+  - scipy>=1.10.0
+  - pandas>=2.0.0
+  - matplotlib>=3.7.0
+  - pillow>=9.0.0
+  - einops>=0.7.0
+  - tqdm>=4.65.0
+  - scikit-image>=0.21.0
+  - pip
+  - pip:
+    - tensorboardX>=2.6.0

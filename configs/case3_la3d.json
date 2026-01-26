@@ -13,7 +13,14 @@
       "epochs": 200,
       "batch_size": 32,
       "lr": 1e-4,
-      "loss": "huber"
+      "loss": "huber",
+      "save_every": 500,
+      "checkpoint_every": 10
+    },
+    "output": {
+      "results_dir": "/scratch/users/minghuix/DiffSim/results/case3_unconditional",
+      "model_dir": "/scratch/users/minghuix/DiffSim/model/case3_unconditional",
+      "log_dir": "/scratch/users/minghuix/DiffSim/logs/case3_unconditional"
     }
   },
 
@@ -29,6 +36,8 @@
     "dropout": 0.2,
     "module_name": "guided_diffusion_3d",
     "predict_type": "x_start",
+    "_predict_type_options": ["epsilon", "x_start"],
+    "_predict_type_note": "epsilon: predict noise, x_start: predict x0 directly",
     "beta_schedule": {
       "train": {
         "schedule": "cosine",
@@ -48,13 +57,20 @@
       "batch_size": 16,
       "lr": 5e-5,
       "loss": "mse",
-      "ema_decay": 0.9999
+      "ema_decay": 0.9999,
+      "save_every": 500,
+      "checkpoint_every": 10
+    },
+    "output": {
+      "results_dir": "/scratch/users/minghuix/DiffSim/results/case3_conditional",
+      "model_dir": "/scratch/users/minghuix/DiffSim/model/case3_conditional",
+      "log_dir": "/scratch/users/minghuix/DiffSim/logs/case3_conditional"
     }
   },
 
   "data": {
-    "train_path": "path/to/train/data",
-    "mask_path": "path/to/masks",
+    "train_path": "/scratch/users/minghuix/1_ModelData3D_4832/train",
+    "mask_path": "/scratch/users/minghuix/1_ModelData3D_4832/train_mask",
     "test_image_path": "/scratch/users/minghuix/1_ModelData3D_4832/test",
     "test_mask_path": "/scratch/users/minghuix/1_ModelData3D_4832/test_mask"
   },

@@ -22,8 +22,56 @@ DiffSim provides a unified framework for training and using diffusion models on 
 
 ## Installation
 
+### Requirements
+- Python 3.10+ (tested with 3.12)
+- PyTorch 2.0+ with CUDA support (recommended for training)
+- CUDA 12.1 (recommended)
+
+### Setup
+
+**Option 1: Using environment.yml (recommended)**
 ```bash
+# Create conda environment from file
+conda env create -f environment.yml
+conda activate diffsim
+```
+
+**Option 2: Manual conda setup**
+```bash
+# Create a new conda environment
+conda create -n diffsim python=3.12
+conda activate diffsim
+
+# Install PyTorch with CUDA 12.1 (adjust for your CUDA version, see https://pytorch.org)
+conda install pytorch torchvision pytorch-cuda=12.1 -c pytorch -c nvidia
+
+# Install other dependencies
 pip install -r requirements.txt
+```
+
+**Option 3: Using pip only**
+```bash
+# Install PyTorch first (with CUDA support)
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+
+# Install other dependencies
+pip install -r requirements.txt
+```
+
+### Verify Installation
+
+Run the test script to verify everything is working:
+```bash
+python tests/test_models.py
+```
+
+You should see all tests pass:
+```
+=== Testing Imports ===
+  [PASS] diffsim main package
+  [PASS] diffusion module
+  ...
+ALL TESTS PASSED - Refactoring is correct!
 ```
 
 ## Project Structure
@@ -141,9 +189,16 @@ Each case has a JSON configuration file in `configs/` with the following structu
 | case2_muddrape | `dim=64, channels=1, dim_mults=(1,2,4)` | `in_channel=6, out_channel=1, channel_mults=[1,2,4]` |
 | case3_la3d | `dim=64, channels=1, dim_mults=(1,2,4)` | `in_channel=6, out_channel=1, channel_mults=[1,2,4,8]` |
 
+## Acknowledgments
+
+This project builds upon the following open-source works:
+
+- [The Annotated Diffusion Model](https://huggingface.co/blog/annotated-diffusion) by Hugging Face - The unconditional diffusion implementation is based on this excellent tutorial.
+- [Palette: Image-to-Image Diffusion Models](https://github.com/Janspiry/Palette-Image-to-Image-Diffusion-Models) by Janspiry - The conditional diffusion architecture is adapted from this implementation.
+
 ## License
 
-[Your License Here]
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
 
 ## Citation
 
@@ -154,5 +209,15 @@ If you use this code in your research, please cite:
   title={DiffSim: Diffusion Models for Geomodelling},
   author={Your Name},
   year={2024}
+}
+
+@inproceedings{xu2024diffsim,
+  title={Denoising diffusion model-based subsurface modeling and quantitative interpretation},
+  author={Xu, Minghui and Song, Suihong and Mukerji, Tapan},
+  booktitle={Fourth International Meeting for Applied Geoscience \& Energy},
+  pages={1660--1664},
+  year={2024},
+  organization={Society of Exploration Geophysicists and American Association of Petroleum Geologists},
+  url={https://pubs.geoscienceworld.org/segeab/proceedings/SEGEAB.43/1/1660/693551}
 }
 ```

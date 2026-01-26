@@ -13,7 +13,14 @@
       "epochs": 300,
       "batch_size": 256,
       "lr": 1e-3,
-      "loss": "huber"
+      "loss": "huber",
+      "save_every": 500,
+      "checkpoint_every": 10
+    },
+    "output": {
+      "results_dir": "/scratch/users/minghuix/DiffSim/results/case2_unconditional",
+      "model_dir": "/scratch/users/minghuix/DiffSim/model/case2_unconditional",
+      "log_dir": "/scratch/users/minghuix/DiffSim/logs/case2_unconditional"
     }
   },
 
@@ -27,6 +34,9 @@
     "num_head_channels": 32,
     "res_blocks": 2,
     "dropout": 0.2,
+    "predict_type": "x_start",
+    "_predict_type_options": ["epsilon", "x_start"],
+    "_predict_type_note": "epsilon: predict noise, x_start: predict x0 directly",
     "beta_schedule": {
       "train": {
         "schedule": "cosine",
@@ -46,13 +56,20 @@
       "batch_size": 64,
       "lr": 5e-5,
       "loss": "mse",
-      "ema_decay": 0.9999
+      "ema_decay": 0.9999,
+      "save_every": 500,
+      "checkpoint_every": 10
+    },
+    "output": {
+      "results_dir": "/scratch/users/minghuix/DiffSim/results/case2_conditional",
+      "model_dir": "/scratch/users/minghuix/DiffSim/model/case2_conditional",
+      "log_dir": "/scratch/users/minghuix/DiffSim/logs/case2_conditional"
     }
   },
 
   "data": {
-    "train_path": "path/to/train/data",
-    "mask_path": "path/to/masks",
+    "train_path": "/home/groups/mukerji/minghuix/multidataset/train_imag/class2",
+    "mask_path": "/home/groups/mukerji/minghuix/multidataset/train_mask/class2",
     "test_image_path": "/home/groups/mukerji/minghuix/multidataset/test_imag/class2",
     "test_mask_path": "/home/groups/mukerji/minghuix/multidataset/test_mask/class2"
   },
