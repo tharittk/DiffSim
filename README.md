@@ -71,7 +71,7 @@ You should see all tests pass:
   [PASS] diffsim main package
   [PASS] diffusion module
   ...
-ALL TESTS PASSED - Refactoring is correct!
+ALL TESTS PASSED - Installation verified!
 ```
 
 ## Project Structure
@@ -111,6 +111,7 @@ Download pretrained models from Google Drive and place them in the `checkpoints/
 ### Quick Start
 
 ```python
+import torch
 from diffsim import Unet, Diffusion
 
 # Create model
@@ -168,26 +169,6 @@ Each case has a JSON configuration file in `configs/` with the following structu
   }
 }
 ```
-
-## Model Architecture
-
-### Unconditional (Unet / Unet3D)
-- Based on the annotated diffusion implementation
-- Uses ResNet blocks with attention
-- Sinusoidal time embeddings
-
-### Conditional (UNet / UNet3D in guided_diffusion)
-- Guided diffusion architecture
-- FiLM conditioning with gamma embeddings
-- Supports masked training for inpainting
-
-## Key Parameters
-
-| Case | Unconditional | Conditional |
-|------|---------------|-------------|
-| case1_geomodeling | `dim=64, channels=1, dim_mults=(1,2,4), timesteps=1500` | `in_channel=5, out_channel=1, channel_mults=[1,2,4]` |
-| case2_muddrape | `dim=64, channels=1, dim_mults=(1,2,4)` | `in_channel=6, out_channel=1, channel_mults=[1,2,4]` |
-| case3_la3d | `dim=64, channels=1, dim_mults=(1,2,4)` | `in_channel=6, out_channel=1, channel_mults=[1,2,4,8]` |
 
 ## Acknowledgments
 

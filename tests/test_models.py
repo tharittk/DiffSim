@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Verification script to confirm the refactoring is correct.
+Verification script to confirm the installation is correct.
 
 Run this script to verify:
 1. All imports work correctly
@@ -9,7 +9,7 @@ Run this script to verify:
 4. Training steps work (backward passes)
 
 Usage:
-    python scripts/verify_refactoring.py
+    python tests/test_models.py
 """
 
 import sys
@@ -305,7 +305,7 @@ def test_data_utilities():
 
 def main():
     print("=" * 60)
-    print("DiffSim Refactoring Verification")
+    print("DiffSim Installation Verification")
     print("=" * 60)
 
     results = {}
@@ -332,7 +332,7 @@ def main():
 
     print("\n" + "=" * 60)
     if all_passed:
-        print("ALL TESTS PASSED - Refactoring is correct!")
+        print("ALL TESTS PASSED - Installation verified!")
     else:
         print("SOME TESTS FAILED - Please check the errors above.")
     print("=" * 60)
