@@ -74,5 +74,10 @@
       "model_dir": "/scratch/users/minghuix/DiffSim/model/case1_conditional",
       "log_dir": "/scratch/users/minghuix/DiffSim/logs/case1_conditional"
     }
+  },
+
+  "checkpoints": {
+    "unconditional": "checkpoints/case1_geomodeling/unconditional.pth",
+    "conditional": "checkpoints/case1_geomodeling/conditional.pth"
   }
 }

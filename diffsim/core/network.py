@@ -239,6 +239,102 @@ class Network(BaseNetwork):
                 ret_arr = torch.cat([ret_arr, y_t], dim=0)
         return y_t, ret_arr
 
+    @torch.no_grad()
+    def ddim_p_sample(self, y_t, t, t_prev, clip_denoised=True, y_cond=None, eta=0.0):
+        """
+        Single DDIM reverse diffusion step.
+
+        Args:
+            y_t: Current noisy sample
+            t: Current timestep
+            t_prev: Previous timestep
+            clip_denoised: Whether to clip predicted x_0
+            y_cond: Conditioning input
+            eta: DDIM stochasticity (0 = deterministic, 1 = DDPM-like)
+
+        Returns:
+            Sample at t_prev
+        """
+        b = y_t.shape[0]
+        noise_level = extract(self.gammas, t, x_shape=(1, 1)).to(y_t.device)
+        model_output = self.denoise_fn(torch.cat([y_cond, y_t], dim=1), noise_level)
+
+        # Get alpha values (gammas = alpha_cumprod)
+        alpha_t = extract(self.gammas, t, y_t.shape)
+        alpha_t_prev = extract(self.gammas, t_prev, y_t.shape) if t_prev[0] >= 0 else torch.ones_like(alpha_t)
+
+        if self.predict_type == 'epsilon':
+            # Model predicts noise, compute x_0 from noise
+            pred_x0 = self.predict_start_from_noise(y_t, t=t, noise=model_output)
+            predicted_noise = model_output
+        elif self.predict_type == 'x_start':
+            # Model directly predicts x_0
+            pred_x0 = model_output
+            # Compute noise from x_0 prediction
+            predicted_noise = (y_t - torch.sqrt(alpha_t) * pred_x0) / torch.sqrt(1 - alpha_t)
+        else:
+            raise ValueError(f"Unknown predict_type: {self.predict_type}")
+
+        if clip_denoised:
+            pred_x0.clamp_(-1., 1.)
+
+        # Compute sigma for DDIM
+        sigma_t = eta * torch.sqrt((1 - alpha_t_prev) / (1 - alpha_t)) * torch.sqrt(1 - alpha_t / alpha_t_prev)
+
+        # Direction pointing to x_t
+        dir_xt = torch.sqrt(1 - alpha_t_prev - sigma_t ** 2) * predicted_noise
+
+        # Random noise
+        noise = torch.randn_like(y_t) if eta > 0 else 0
+
+        # x_{t-1}
+        y_prev = torch.sqrt(alpha_t_prev) * pred_x0 + dir_xt + sigma_t * noise
+        return y_prev
+
+    @torch.no_grad()
+    def restoration_ddim(self, y_cond, y_t=None, y_0=None, mask=None, ddim_steps=50, eta=0.0, sample_num=8):
+        """
+        Perform conditional generation / inpainting using DDIM (faster).
+
+        Args:
+            y_cond: Conditioning input
+            y_t: Optional starting noise (defaults to random)
+            y_0: Ground truth for masked regions (for inpainting)
+            mask: Binary mask (1 = generate, 0 = keep from y_0)
+            ddim_steps: Number of DDIM steps (fewer than full timesteps)
+            eta: DDIM stochasticity (0 = deterministic, 1 = DDPM-like)
+            sample_num: Number of intermediate samples to return
+
+        Returns:
+            y_t: Final generated sample
+            ret_arr: Array of intermediate samples
+        """
+        b, *_ = y_cond.shape
+
+        # Create DDIM timestep sequence
+        c = self.num_timesteps // ddim_steps
+        ddim_timesteps = list(range(0, self.num_timesteps, c))
+
+        assert ddim_steps > sample_num, 'ddim_steps must be greater than sample_num'
+        sample_inter = ddim_steps // sample_num
+
+        y_t = default(y_t, lambda: torch.randn_like(y_cond[:, :1, ...]))
+        ret_arr = y_t
+
+        for i, step_idx in enumerate(tqdm(reversed(range(len(ddim_timesteps))), desc='DDIM Sampling', total=len(ddim_timesteps))):
+            t = torch.full((b,), ddim_timesteps[step_idx], device=y_cond.device, dtype=torch.long)
+            t_prev = torch.full((b,), ddim_timesteps[step_idx - 1] if step_idx > 0 else -1, device=y_cond.device, dtype=torch.long)
+
+            y_t = self.ddim_p_sample(y_t, t, t_prev, y_cond=y_cond, eta=eta)
+
+            if mask is not None:
+                y_t = y_0 * (1. - mask) + mask * y_t
+
+            if (len(ddim_timesteps) - 1 - step_idx) % sample_inter == 0:
+                ret_arr = torch.cat([ret_arr, y_t], dim=0)
+
+        return y_t, ret_arr
+
     def forward(self, y_0, y_cond=None, mask=None, noise=None):
         """
         Forward pass for training.
