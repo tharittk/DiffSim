@@ -178,12 +178,6 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 If you use this code in your research, please cite:
 
 ```bibtex
-@misc{diffsim2024,
-  title={DiffSim: Diffusion Models for Geomodelling},
-  author={Your Name},
-  year={2024}
-}
-
 @inproceedings{xu2024diffsim,
   title={Denoising diffusion model-based subsurface modeling and quantitative interpretation},
   author={Xu, Minghui and Song, Suihong and Mukerji, Tapan},
