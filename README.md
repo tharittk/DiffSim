@@ -98,13 +98,7 @@ DiffSim/
 
 ## Checkpoints
 
-Download pretrained models from Google Drive and place them in the `checkpoints/` directory:
-
-| Case | Unconditional | Conditional |
-|------|---------------|-------------|
-| case1_geomodeling | [Download](#) | [Download](#) |
-| case2_muddrape | [Download](#) | [Download](#) |
-| case3_la3d | [Download](#) | [Download](#) |
+Download pretrained models from [Google Drive](https://drive.google.com/drive/folders/1_qOA0RCEbGVY-hJVpY1xFi5KI2xjGQiq?usp=sharing) and place them in the `checkpoints/` directory.
 
 ## Usage
 
@@ -172,10 +166,8 @@ Each case has a JSON configuration file in `configs/` with the following structu
 
 ## Acknowledgments
 
-This project builds upon the following open-source works:
-
-- [The Annotated Diffusion Model](https://huggingface.co/blog/annotated-diffusion) by Hugging Face - The unconditional diffusion implementation is based on this excellent tutorial.
-- [Palette: Image-to-Image Diffusion Models](https://github.com/Janspiry/Palette-Image-to-Image-Diffusion-Models) by Janspiry - The conditional diffusion architecture is adapted from this implementation.
+- [The Annotated Diffusion Model](https://huggingface.co/blog/annotated-diffusion) by Hugging Face
+- [Palette: Image-to-Image Diffusion Models](https://github.com/Janspiry/Palette-Image-to-Image-Diffusion-Models) by Janspiry
 
 ## License
 

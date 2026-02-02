@@ -34,7 +34,7 @@
     "num_head_channels": 32,
     "res_blocks": 2,
     "dropout": 0.2,
-    "predict_type": "x_start",
+    "predict_type": "epsilon",
     "_predict_type_options": ["epsilon", "x_start"],
     "_predict_type_note": "epsilon: predict noise, x_start: predict x0 directly",
     "beta_schedule": {
