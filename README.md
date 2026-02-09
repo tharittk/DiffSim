@@ -10,7 +10,7 @@ DiffSim provides a unified framework for training and using diffusion models on 
 - **2D facies modeling** (channel facies, mud drapes)
 - **3D volumetric modeling** (3D facies)
 - **Unconditional generation** (generate new samples from noise)
-- **Conditional generation / Inpainting** (fill in missing regions given constraints)
+- **Conditional generation** (conditioned on given well facies)
 
 ## Cases
 
