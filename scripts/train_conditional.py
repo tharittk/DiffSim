@@ -29,8 +29,10 @@ import torch.multiprocessing as mp
 def find_free_port():
     """Find a free port on localhost."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(('', 0))
+        s.bind(("", 0))
         return str(s.getsockname()[1])
+
+
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
@@ -40,11 +42,13 @@ from tensorboardX import SummaryWriter
 from tqdm import tqdm
 
 import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from diffsim.core.network import Network
 from diffsim.models.guided_diffusion import UNet, UNet3D
 from diffsim.data import InpaintDatasetCase1, InpaintDatasetCase2, NPYInpaintDataset
+from diffsim.data.flumy_dataset import FlumyDataset
 
 
 def set_seed(seed):
@@ -62,26 +66,26 @@ def main_worker(rank, world_size, config_path, gpu_ids, port, timestamp):
     # Setup distributed training
     distributed = world_size > 1
     if distributed:
-        os.environ['MASTER_ADDR'] = '127.0.0.1'
-        os.environ['MASTER_PORT'] = port
+        os.environ["MASTER_ADDR"] = "127.0.0.1"
+        os.environ["MASTER_PORT"] = port
         torch.cuda.set_device(gpu_ids[rank])
         torch.distributed.init_process_group(
-            backend='nccl',
-            init_method=f'tcp://127.0.0.1:{port}',
+            backend="nccl",
+            init_method=f"tcp://127.0.0.1:{port}",
             world_size=world_size,
-            rank=rank
+            rank=rank,
         )
-        device = torch.device(f'cuda:{gpu_ids[rank]}')
-        print(f'[Rank {rank}] Using GPU {gpu_ids[rank]} for training')
+        device = torch.device(f"cuda:{gpu_ids[rank]}")
+        print(f"[Rank {rank}] Using GPU {gpu_ids[rank]} for training")
     else:
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        print(f'Using device: {device}')
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        print(f"Using device: {device}")
 
     # Set seed
     set_seed(42 + rank)
 
     # Only rank 0 prints info
-    is_main = (rank == 0)
+    is_main = rank == 0
 
     # Load config
     with open(config_path) as f:
@@ -107,28 +111,34 @@ def main_worker(rank, world_size, config_path, gpu_ids, port, timestamp):
     }
 
     # Choose module type and predict_type
-    module_name = cond.get('module_name', 'guided_diffusion_3d' if is_3d else 'guided_diffusion')
-    predict_type = cond.get('predict_type', 'epsilon')
+    module_name = cond.get(
+        "module_name", "guided_diffusion_3d" if is_3d else "guided_diffusion"
+    )
+    predict_type = cond.get("predict_type", "epsilon")
 
     # Build network
     network = Network(
         unet=unet_config,
         beta_schedule=cond["beta_schedule"],
         module_name=module_name,
-        predict_type=predict_type
+        predict_type=predict_type,
     )
     network.to(device)
 
     # Wrap with DDP if distributed
     if distributed:
-        network = DDP(network, device_ids=[gpu_ids[rank]], output_device=gpu_ids[rank],
-                      find_unused_parameters=True)
+        network = DDP(
+            network,
+            device_ids=[gpu_ids[rank]],
+            output_device=gpu_ids[rank],
+            find_unused_parameters=True,
+        )
         net_module = network.module  # Access underlying module
     else:
         net_module = network
 
     # Setup noise schedule
-    net_module.set_new_noise_schedule(device=device, phase='train')
+    net_module.set_new_noise_schedule(device=device, phase="train")
 
     # Set loss function
     if train_cfg["loss"] == "mse":
@@ -142,8 +152,12 @@ def main_worker(rank, world_size, config_path, gpu_ids, port, timestamp):
     # Setup output directories (only rank 0 creates)
     exp_name = config["name"]
     output_cfg = cond.get("output", {})
-    base_results_dir = Path(output_cfg.get("results_dir", f"./results/{exp_name}_conditional"))
-    base_model_dir = Path(output_cfg.get("model_dir", f"./model/{exp_name}_conditional"))
+    base_results_dir = Path(
+        output_cfg.get("results_dir", f"./results/{exp_name}_conditional")
+    )
+    base_model_dir = Path(
+        output_cfg.get("model_dir", f"./model/{exp_name}_conditional")
+    )
     base_log_dir = Path(output_cfg.get("log_dir", str(base_results_dir / "logs")))
 
     results_dir = base_results_dir / timestamp
@@ -161,33 +175,50 @@ def main_worker(rank, world_size, config_path, gpu_ids, port, timestamp):
 
     # Setup dataset
     data_cfg = cond.get("data", config.get("data", {}))
-    data_path = data_cfg.get("train_image", data_cfg.get("train_image_path", data_cfg.get("train_path", "")))
+    data_path = data_cfg.get(
+        "train_image", data_cfg.get("train_image_path", data_cfg.get("train_path", ""))
+    )
     mask_path = data_cfg.get("train_mask", data_cfg.get("mask_path", ""))
 
-    if is_3d:
+    dataset_type = config.get("dataset_type", None)
+    image_size = config["image_size"]
+
+    if dataset_type == "flumy":
+        # Flumy dataset: loads .npz files with (facies, RMS) pairs
+        train_data_path = data_cfg.get("train_data", data_path)
+        n_wells_range = tuple(data_cfg.get("n_wells_range", [3, 15]))
+        min_well_spacing = data_cfg.get("min_well_spacing", 4)
+        dataset = FlumyDataset(
+            data_root=train_data_path,
+            image_size=(image_size, image_size),
+            n_wells_range=n_wells_range,
+            min_well_spacing=min_well_spacing,
+        )
+    elif is_3d:
         dataset = NPYInpaintDataset(
-            data_folder=data_path,
-            mask_folder=mask_path,
-            max_files=12000
+            data_folder=data_path, mask_folder=mask_path, max_files=12000
         )
     else:
-        image_size = config["image_size"]
-        DatasetClass = InpaintDatasetCase1 if cond["in_channel"] == 5 else InpaintDatasetCase2
+        DatasetClass = (
+            InpaintDatasetCase1 if cond["in_channel"] == 5 else InpaintDatasetCase2
+        )
         dataset = DatasetClass(
             data_root=(data_path, mask_path),
-            mask_config={'mask_mode': 'file'},
-            image_size=[image_size, image_size]
+            mask_config={"mask_mode": "file"},
+            image_size=[image_size, image_size],
         )
 
     # Setup sampler and dataloader
     if distributed:
-        sampler = DistributedSampler(dataset, num_replicas=world_size, rank=rank, shuffle=True)
+        sampler = DistributedSampler(
+            dataset, num_replicas=world_size, rank=rank, shuffle=True
+        )
         dataloader = DataLoader(
             dataset,
             batch_size=train_cfg["batch_size"],
             sampler=sampler,
             num_workers=4,
-            pin_memory=True
+            pin_memory=True,
         )
     else:
         dataloader = DataLoader(
@@ -195,7 +226,7 @@ def main_worker(rank, world_size, config_path, gpu_ids, port, timestamp):
             batch_size=train_cfg["batch_size"],
             shuffle=True,
             num_workers=4,
-            pin_memory=True
+            pin_memory=True,
         )
 
     if is_main:
@@ -208,18 +239,68 @@ def main_worker(rank, world_size, config_path, gpu_ids, port, timestamp):
 
     # Setup optimizer and scheduler
     optimizer = Adam(network.parameters(), lr=train_cfg["lr"])
-    scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=10, factor=0.5)
+    scheduler = lr_scheduler.ReduceLROnPlateau(
+        optimizer, "min", patience=10, factor=0.5
+    )
+
+    # Gradient clipping (prevents training instability)
+    grad_clip = train_cfg.get("grad_clip", 1.0)
 
     # Optional: EMA (only on main process)
     ema_decay = train_cfg.get("ema_decay", None)
     if ema_decay and is_main:
         ema_state = {k: v.clone() for k, v in net_module.state_dict().items()}
 
+    # Save config for reproducibility
+    if is_main:
+        import shutil
+
+        shutil.copy2(config_path, str(model_dir / "config.json"))
+
+    # Setup validation dataset if test data path is available
+    val_dataloader = None
+    test_data_path = data_cfg.get("test_data", None)
+    if test_data_path and os.path.isdir(test_data_path) and is_main:
+        if dataset_type == "flumy":
+            val_dataset = FlumyDataset(
+                data_root=test_data_path,
+                image_size=(image_size, image_size),
+                n_wells_range=n_wells_range,
+                min_well_spacing=min_well_spacing,
+                seed=123,  # fixed seed for consistent validation
+            )
+            val_dataloader = DataLoader(
+                val_dataset,
+                batch_size=train_cfg["batch_size"],
+                shuffle=False,
+                num_workers=2,
+                pin_memory=True,
+            )
+
+    # Resume from checkpoint if specified
+    start_epoch = 0
+    resume_path = train_cfg.get("resume_checkpoint", None)
+    if resume_path and os.path.isfile(resume_path):
+        if is_main:
+            print(f"Resuming from checkpoint: {resume_path}")
+        checkpoint = torch.load(resume_path, map_location=device, weights_only=False)
+        if isinstance(checkpoint, dict) and "model_state" in checkpoint:
+            net_module.load_state_dict(checkpoint["model_state"])
+            if "optimizer_state" in checkpoint:
+                optimizer.load_state_dict(checkpoint["optimizer_state"])
+            if "epoch" in checkpoint:
+                start_epoch = checkpoint["epoch"] + 1
+            if ema_decay and is_main and "ema_state" in checkpoint:
+                ema_state = checkpoint["ema_state"]
+        else:
+            # Legacy format: just state dict
+            net_module.load_state_dict(checkpoint)
+
     # Training loop
     epochs = train_cfg["epochs"]
     save_every = train_cfg.get("save_every", 500)
     checkpoint_every = train_cfg.get("checkpoint_every", 10)
-    min_loss = float('inf')
+    min_loss = float("inf")
     best_epoch = 0
 
     if is_main:
@@ -227,9 +308,11 @@ def main_worker(rank, world_size, config_path, gpu_ids, port, timestamp):
         print(f"Run ID: {timestamp}")
         print(f"Model type: {'3D' if is_3d else '2D'}, Predict type: {predict_type}")
         print(f"Epochs: {epochs}, Batch size: {train_cfg['batch_size']}")
-        print(f"Save samples every: {save_every} steps, Checkpoint every: {checkpoint_every} epochs")
+        print(
+            f"Save samples every: {save_every} steps, Checkpoint every: {checkpoint_every} epochs"
+        )
 
-    for epoch in range(epochs):
+    for epoch in range(start_epoch, epochs):
         # Set epoch for sampler (important for shuffling)
         if distributed:
             sampler.set_epoch(epoch)
@@ -241,12 +324,12 @@ def main_worker(rank, world_size, config_path, gpu_ids, port, timestamp):
             optimizer.zero_grad()
 
             # Get batch data
-            gt_image = batch['gt_image'].to(device)
-            cond_image = batch['cond_image']
+            gt_image = batch["gt_image"].to(device)
+            cond_image = batch["cond_image"]
             if isinstance(cond_image, np.ndarray):
                 cond_image = torch.from_numpy(cond_image).float()
             cond_image = cond_image.to(device)
-            mask = batch['mask'].to(device)
+            mask = batch["mask"].to(device)
 
             # Forward pass
             if distributed:
@@ -258,6 +341,8 @@ def main_worker(rank, world_size, config_path, gpu_ids, port, timestamp):
 
             # Backprop
             loss.backward()
+            if grad_clip > 0:
+                torch.nn.utils.clip_grad_norm_(network.parameters(), grad_clip)
             optimizer.step()
 
             # Update EMA (only on main)
@@ -269,9 +354,11 @@ def main_worker(rank, world_size, config_path, gpu_ids, port, timestamp):
             # Logging (only on main)
             global_step = epoch * len(dataloader) + step
             if is_main:
-                writer.add_scalar('Loss/Train', loss.item(), global_step)
-                writer.add_scalar('Learning_rate', optimizer.param_groups[0]['lr'], global_step)
-                pbar.set_postfix({'loss': f'{loss.item():.6f}'})
+                writer.add_scalar("Loss/Train", loss.item(), global_step)
+                writer.add_scalar(
+                    "Learning_rate", optimizer.param_groups[0]["lr"], global_step
+                )
+                pbar.set_postfix({"loss": f"{loss.item():.6f}"})
 
             # Save samples periodically (only on main)
             if is_main and global_step != 0 and global_step % save_every == 0:
@@ -281,15 +368,41 @@ def main_worker(rank, world_size, config_path, gpu_ids, port, timestamp):
                     sample_gt = gt_image[:4]
                     sample_mask = mask[:4]
 
-                    output, _ = net_module.restoration(sample_cond, y_0=sample_gt, mask=sample_mask)
+                    output, _ = net_module.restoration(
+                        sample_cond, y_0=sample_gt, mask=sample_mask
+                    )
 
                     if is_3d:
                         mid = config["image_size"][0] // 2
-                        save_image(output[:, :, mid], str(results_dir / f'output_{epoch}_{global_step}.png'), nrow=2, normalize=True, value_range=(-1, 1))
-                        save_image(sample_gt[:, :, mid], str(results_dir / f'gt_{epoch}_{global_step}.png'), nrow=2, normalize=True, value_range=(-1, 1))
+                        save_image(
+                            output[:, :, mid],
+                            str(results_dir / f"output_{epoch}_{global_step}.png"),
+                            nrow=2,
+                            normalize=True,
+                            value_range=(-1, 1),
+                        )
+                        save_image(
+                            sample_gt[:, :, mid],
+                            str(results_dir / f"gt_{epoch}_{global_step}.png"),
+                            nrow=2,
+                            normalize=True,
+                            value_range=(-1, 1),
+                        )
                     else:
-                        save_image(output, str(results_dir / f'output_{epoch}_{global_step}.png'), nrow=2, normalize=True, value_range=(-1, 1))
-                        save_image(sample_gt, str(results_dir / f'gt_{epoch}_{global_step}.png'), nrow=2, normalize=True, value_range=(-1, 1))
+                        save_image(
+                            output,
+                            str(results_dir / f"output_{epoch}_{global_step}.png"),
+                            nrow=2,
+                            normalize=True,
+                            value_range=(-1, 1),
+                        )
+                        save_image(
+                            sample_gt,
+                            str(results_dir / f"gt_{epoch}_{global_step}.png"),
+                            nrow=2,
+                            normalize=True,
+                            value_range=(-1, 1),
+                        )
                 net_module.train()
 
         # Sync losses across processes
@@ -305,20 +418,50 @@ def main_worker(rank, world_size, config_path, gpu_ids, port, timestamp):
                 min_loss = avg_loss
                 best_epoch = epoch
                 if ema_decay:
-                    best_model_state = {k: v.cpu().clone() for k, v in ema_state.items()}
+                    best_model_state = {
+                        k: v.cpu().clone() for k, v in ema_state.items()
+                    }
                 else:
-                    best_model_state = {k: v.cpu().clone() for k, v in net_module.state_dict().items()}
-                torch.save(best_model_state, str(model_dir / 'best_model.pth'))
-                with open(model_dir / 'best_epoch.txt', 'w') as f:
+                    best_model_state = {
+                        k: v.cpu().clone() for k, v in net_module.state_dict().items()
+                    }
+                torch.save(best_model_state, str(model_dir / "best_model.pth"))
+                with open(model_dir / "best_epoch.txt", "w") as f:
                     f.write(str(best_epoch))
 
-            # Save checkpoint
+            # Save checkpoint (with full state for resumability)
             if epoch % checkpoint_every == 0:
+                checkpoint_state = {
+                    "model_state": net_module.state_dict(),
+                    "optimizer_state": optimizer.state_dict(),
+                    "epoch": epoch,
+                    "min_loss": min_loss,
+                    "best_epoch": best_epoch,
+                }
                 if ema_decay:
-                    save_state = {k: v.cpu().clone() for k, v in ema_state.items()}
-                else:
-                    save_state = {k: v.cpu().clone() for k, v in net_module.state_dict().items()}
-                torch.save(save_state, str(model_dir / f'model_epoch_{epoch:03d}.pth'))
+                    checkpoint_state["ema_state"] = {
+                        k: v.cpu().clone() for k, v in ema_state.items()
+                    }
+                torch.save(
+                    checkpoint_state,
+                    str(model_dir / f"checkpoint_epoch_{epoch:03d}.pth"),
+                )
+
+        # Validation loss (only on main process)
+        if is_main and val_dataloader is not None and epoch % checkpoint_every == 0:
+            net_module.eval()
+            val_losses = []
+            with torch.no_grad():
+                for val_batch in val_dataloader:
+                    val_gt = val_batch["gt_image"].to(device)
+                    val_cond = val_batch["cond_image"].to(device)
+                    val_mask = val_batch["mask"].to(device)
+                    val_loss = net_module(val_gt, y_cond=val_cond, mask=val_mask)
+                    val_losses.append(val_loss.item())
+            avg_val_loss = np.mean(val_losses)
+            writer.add_scalar("Loss/Validation", avg_val_loss, epoch)
+            print(f"  Validation Loss: {avg_val_loss:.6f}")
+            net_module.train()
 
         scheduler.step(avg_loss)
 
@@ -326,7 +469,7 @@ def main_worker(rank, world_size, config_path, gpu_ids, port, timestamp):
             print(f"Epoch {epoch} completed. Avg Loss: {avg_loss:.6f}")
 
     if is_main:
-        print(f'Training completed. Best model at epoch {best_epoch}')
+        print(f"Training completed. Best model at epoch {best_epoch}")
         writer.close()
         print(f"Results saved to {results_dir}")
         print(f"Models saved to {model_dir}")
@@ -338,22 +481,32 @@ def main_worker(rank, world_size, config_path, gpu_ids, port, timestamp):
 
 def main():
     parser = argparse.ArgumentParser(description="Train conditional diffusion model")
-    parser.add_argument("--config", "-c", type=str, required=True, help="Path to config JSON file")
-    parser.add_argument("-gpu", "--gpu_ids", type=str, default=None, help="GPU ids, e.g., '0,1,2,3'")
-    parser.add_argument("-P", "--port", type=str, default="auto", help="Port for distributed training, or 'auto' to find free port")
+    parser.add_argument(
+        "--config", "-c", type=str, required=True, help="Path to config JSON file"
+    )
+    parser.add_argument(
+        "-gpu", "--gpu_ids", type=str, default=None, help="GPU ids, e.g., '0,1,2,3'"
+    )
+    parser.add_argument(
+        "-P",
+        "--port",
+        type=str,
+        default="auto",
+        help="Port for distributed training, or 'auto' to find free port",
+    )
     args = parser.parse_args()
 
     # Parse GPU ids
     if args.gpu_ids is not None:
-        gpu_ids = [int(x) for x in args.gpu_ids.split(',')]
-        os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu_ids
+        gpu_ids = [int(x) for x in args.gpu_ids.split(",")]
+        os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_ids
         # After setting CUDA_VISIBLE_DEVICES, GPU indices become 0, 1, 2, ...
         gpu_ids = list(range(len(gpu_ids)))
     else:
         gpu_ids = [0] if torch.cuda.is_available() else []
 
     # Parse port - auto-select if needed
-    if args.port == 'auto':
+    if args.port == "auto":
         port = find_free_port()
         print(f"Auto-selected port: {port}")
     else:
@@ -371,7 +524,7 @@ def main():
         mp.spawn(
             main_worker,
             nprocs=world_size,
-            args=(world_size, args.config, gpu_ids, port, timestamp)
+            args=(world_size, args.config, gpu_ids, port, timestamp),
         )
     else:
         # Single GPU or CPU training
