@@ -10,7 +10,7 @@
     "dim_mults": [1, 2, 4],
     "beta_schedule": "linear",
     "data": {
-      "train": "/home/users/minghuix/1_Diffusion_Geomodeling/dataset3f/train/"
+      "train":"./data/dataset3f/train/"
     },
     "training": {
       "epochs": 300,
@@ -55,13 +55,13 @@
       }
     },
     "data": {
-      "train_image": "/home/groups/mukerji/minghuix/dataset3f/train_imag",
-      "train_mask": "/home/groups/mukerji/minghuix/dataset3f/train_mask",
-      "test_image": "/home/groups/mukerji/minghuix/2_Conditional_Diffusion/dataset3f/test_imag",
-      "test_mask": "/home/groups/mukerji/minghuix/2_Conditional_Diffusion/dataset3f/test_mask"
+      "train_image": "./data/dataset3f/train_imag",
+      "train_mask": "./data/dataset3f/train_mask",
+      "test_image": "./data/dataset3f/test_imag",
+      "test_mask": "./data/dataset3f/test_mask"
     },
     "training": {
-      "epochs": 1000,
+      "epochs": 1,
       "batch_size": 64,
       "lr": 5e-5,
       "loss": "mse",
@@ -70,9 +70,9 @@
       "checkpoint_every": 10
     },
     "output": {
-      "results_dir": "/scratch/users/minghuix/DiffSim/results/case1_conditional",
-      "model_dir": "/scratch/users/minghuix/DiffSim/model/case1_conditional",
-      "log_dir": "/scratch/users/minghuix/DiffSim/logs/case1_conditional"
+      "results_dir": "./scratch/results/case1_conditional",
+      "model_dir": "./scratch/model/case1_conditional",
+      "log_dir": "./scratch/logs/case1_conditional"
     }
   },
 
