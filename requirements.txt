@@ -22,3 +22,6 @@ tensorboardX>=2.6.0
 
 # Image processing
 scikit-image>=0.21.0
+
+# Geological simulation
+flumy>=8.0

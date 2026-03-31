@@ -1,0 +1,96 @@
+{
+    "name": "case1_flumy",
+    "type": "2d",
+    "image_size": 64,
+    "dataset_type": "flumy",
+    "conditional": {
+        "timesteps": 1500,
+        "in_channel": 6,
+        "out_channel": 1,
+        "inner_channel": 64,
+        "channel_mults": [
+            1,
+            2,
+            4
+        ],
+        "attn_res": [
+            16
+        ],
+        "num_head_channels": 32,
+        "res_blocks": 2,
+        "dropout": 0.2,
+        "predict_type": "epsilon",
+        "_predict_type_options": [
+            "epsilon",
+            "x_start"
+        ],
+        "_conditioning_channels_note": "in_channel=6: [rms, well_mask, sand, bank, mud] + y_t",
+        "beta_schedule": {
+            "train": {
+                "schedule": "cosine",
+                "n_timestep": 1500,
+                "linear_start": 1e-6,
+                "linear_end": 0.01
+            },
+            "test": {
+                "schedule": "cosine",
+                "n_timestep": 1500,
+                "linear_start": 1e-4,
+                "linear_end": 0.09
+            }
+        },
+        "data": {
+            "train_data": "data/flumy_dataset/train",
+            "test_data": "data/flumy_dataset/test",
+            "n_wells_range": [
+                3,
+                15
+            ],
+            "min_well_spacing": 4
+        },
+        "training": {
+            "epochs": 1000,
+            "batch_size": 64,
+            "lr": 5e-5,
+            "loss": "mse",
+            "ema_decay": 0.9999,
+            "save_every": 500,
+            "checkpoint_every": 10
+        },
+        "output": {
+            "results_dir": "results/case1_flumy_conditional",
+            "model_dir": "model/case1_flumy_conditional",
+            "log_dir": "logs/case1_flumy_conditional"
+        }
+    },
+    "data_generation": {
+        "n_simulations": 100,
+        "slices_per_sim": 10,
+        "output_dir": "data/flumy_dataset",
+        "seed": 42,
+        "train_fraction": 0.8,
+        "flumy": {
+            "nx": 250,
+            "ny": 250,
+            "mesh": 10,
+            "hmax": 3.0,
+            "ng_range": [
+                30,
+                70
+            ],
+            "isbx_range": [
+                50,
+                100
+            ]
+        },
+        "seismic": {
+            "f_dominant": 25.0,
+            "rms_window_half": 10,
+            "noise_level": 0.05,
+            "smooth_sigma": 1.0
+        }
+    },
+    "checkpoints": {
+        "conditional": "checkpoints/case1_flumy/conditional.pth"
+    }
+}
