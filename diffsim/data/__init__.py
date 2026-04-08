@@ -22,15 +22,12 @@ from .mask import (
 )
 from .flumy_generator import (
     FlumyGenerator,
-    normalize_facies,
-    denormalize_facies,
     FACIES_MUD,
     FACIES_BANK,
     FACIES_SAND,
 )
 from .seismic import (
     generate_rms_from_facies_3d,
-    generate_rms_from_facies_2d,
     ricker_wavelet,
     facies_to_ai,
     compute_reflectivity_vertical,

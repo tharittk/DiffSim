@@ -35,6 +35,10 @@ class FlumyGenerator:
     data generation. Each simulation generates a unique realization using
     a different random seed.
 
+    NOTE: it is better to fix nx, ny to some multiple of 64 (e.g. 256) to ensure compatibility with common CNN architectures.
+    Varying the mesh size according to channel width introduces complexity in the training pipeline. Some channels geting cropped
+    out should not be a problem as long as the training data is sufficiently diverse.
+
     Args:
         nx: Number of grid nodes along x-axis
         ny: Number of grid nodes along y-axis
