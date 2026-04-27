@@ -25,12 +25,15 @@ from .flumy_generator import (
     FACIES_MUD,
     FACIES_BANK,
     FACIES_SAND,
+    normalize_facies,
+    denormalize_facies,
 )
 from .seismic import (
     generate_rms_from_facies_3d,
     ricker_wavelet,
     facies_to_ai,
     compute_reflectivity_vertical,
+    DEFAULT_ROCK_PROPERTIES,
 )
 from .well_sampling import (
     sample_well_locations,
@@ -62,7 +65,6 @@ __all__ = [
     "FACIES_BANK",
     "FACIES_SAND",
     "generate_rms_from_facies_3d",
-    "generate_rms_from_facies_2d",
     "ricker_wavelet",
     "facies_to_ai",
     "compute_reflectivity_vertical",

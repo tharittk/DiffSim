@@ -94,7 +94,7 @@ class FlumyGenerator:
 
         facies_raw, _, _ = flsim.getBlock(self.dz, zb=0, nz=self.nz)
 
-        return facies_raw
+        return facies_raw.astype(np.int8)
 
     @staticmethod
     def reclassify_to_three_facies(facies_raw):
@@ -119,70 +119,38 @@ class FlumyGenerator:
 
         return facies
 
-    @staticmethod
-    def extract_plan_views(facies_block, z_indices=None):
-        """
-        Extract 2D plan-view (horizontal) slices from a 3D facies block.
 
-        Args:
-            facies_block: 3D array of shape (nx, ny, nz)
-            z_indices: List of z-indices to extract. If None, extracts all.
+def normalize_facies(facies_map):
+    """
+    Normalize integer facies codes to [-1, 1] range.
 
-        Returns:
-            List of 2D arrays of shape (nx, ny)
-        """
-        if z_indices is None:
-            z_indices = range(facies_block.shape[2])
-        return [facies_block[:, :, z] for z in z_indices]
+    Args:
+        facies_map: 2D array with values {0: mud, 1: bank, 2: sand}
 
-    @staticmethod
-    def extract_cross_sections(facies_block, y_indices=None):
-        """
-        Extract 2D cross-flow (x-z) sections from a 3D facies block.
+    Returns:
+        Normalized array with values {-1.0: mud, 0.0: bank, 1.0: sand}
+    """
+    normalized = np.zeros_like(facies_map, dtype=np.float32)
+    for code, value in FACIES_NORMALIZED.items():
+        normalized[facies_map == code] = value
+    return normalized
 
-        Args:
-            facies_block: 3D array of shape (nx, ny, nz)
-            y_indices: List of y-indices to extract. If None, extracts all.
 
-        Returns:
-            List of 2D arrays of shape (nx, nz)
-        """
-        if y_indices is None:
-            y_indices = range(facies_block.shape[1])
-        return [facies_block[:, y, :] for y in y_indices]
+def denormalize_facies(normalized_map):
+    """
+    Convert normalized facies values back to integer codes.
 
-    @staticmethod
-    def normalize_facies(facies_map):
-        """
-        Normalize integer facies codes to [-1, 1] range.
+    Args:
+        normalized_map: Array with continuous values, will be rounded to nearest facies
 
-        Args:
-            facies_map: 2D array with values {0: mud, 1: bank, 2: sand}
+    Returns:
+        Integer array with values {0, 1, 2}
+    """
+    values = np.array(list(FACIES_NORMALIZED.values()))
+    codes = np.array(list(FACIES_NORMALIZED.keys()))
 
-        Returns:
-            Normalized array with values {-1.0: mud, 0.0: bank, 1.0: sand}
-        """
-        normalized = np.zeros_like(facies_map, dtype=np.float32)
-        for code, value in FACIES_NORMALIZED.items():
-            normalized[facies_map == code] = value
-        return normalized
-
-    @staticmethod
-    def denormalize_facies(normalized_map):
-        """
-        Convert normalized facies values back to integer codes.
-
-        Args:
-            normalized_map: Array with continuous values, will be rounded to nearest facies
-
-        Returns:
-            Integer array with values {0, 1, 2}
-        """
-        values = np.array(list(FACIES_NORMALIZED.values()))
-        codes = np.array(list(FACIES_NORMALIZED.keys()))
-
-        distances = np.abs(
-            normalized_map[..., np.newaxis] - values[np.newaxis, np.newaxis, :]
-        )
-        closest = np.argmin(distances, axis=-1)
-        return codes[closest].astype(np.int8)
+    distances = np.abs(
+        normalized_map[..., np.newaxis] - values[np.newaxis, np.newaxis, :]
+    )
+    closest = np.argmin(distances, axis=-1)
+    return codes[closest].astype(np.int8)

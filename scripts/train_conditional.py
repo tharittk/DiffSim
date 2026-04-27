@@ -184,15 +184,11 @@ def main_worker(rank, world_size, config_path, gpu_ids, port, timestamp):
     image_size = config["image_size"]
 
     if dataset_type == "flumy":
-        # Flumy dataset: loads .npz files with (facies, RMS) pairs
+        # Flumy dataset: loads paired facies/rms files from split subdirectories.
         train_data_path = data_cfg.get("train_data", data_path)
-        n_wells_range = tuple(data_cfg.get("n_wells_range", [3, 15]))
-        min_well_spacing = data_cfg.get("min_well_spacing", 4)
         dataset = FlumyDataset(
             data_root=train_data_path,
             image_size=(image_size, image_size),
-            n_wells_range=n_wells_range,
-            min_well_spacing=min_well_spacing,
         )
     elif is_3d:
         dataset = NPYInpaintDataset(
@@ -265,8 +261,6 @@ def main_worker(rank, world_size, config_path, gpu_ids, port, timestamp):
             val_dataset = FlumyDataset(
                 data_root=test_data_path,
                 image_size=(image_size, image_size),
-                n_wells_range=n_wells_range,
-                min_well_spacing=min_well_spacing,
                 seed=123,  # fixed seed for consistent validation
             )
             val_dataloader = DataLoader(

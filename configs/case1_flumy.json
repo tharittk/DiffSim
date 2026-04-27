@@ -5,7 +5,7 @@
     "dataset_type": "flumy",
     "conditional": {
         "timesteps": 1500,
-        "in_channel": 6,
+        "in_channel": 2,
         "out_channel": 1,
         "inner_channel": 64,
         "channel_mults": [
@@ -24,7 +24,7 @@
             "epsilon",
             "x_start"
         ],
-        "_conditioning_channels_note": "in_channel=6: [rms, well_mask, sand, bank, mud] + y_t",
+        "_conditioning_channels_note": "in_channel=2: [rms] + y_t",
         "beta_schedule": {
             "train": {
                 "schedule": "cosine",
@@ -41,12 +41,7 @@
         },
         "data": {
             "train_data": "data/flumy_dataset/train",
-            "test_data": "data/flumy_dataset/test",
-            "n_wells_range": [
-                3,
-                15
-            ],
-            "min_well_spacing": 4
+            "test_data": "data/flumy_dataset/test"
         },
         "training": {
             "epochs": 1000,
@@ -64,6 +59,7 @@
         }
     },
     "data_generation": {
+        "mode": "full",
         "n_simulations": 100,
         "slices_per_sim": 10,
         "output_dir": "data/flumy_dataset",

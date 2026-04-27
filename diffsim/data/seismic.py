@@ -23,6 +23,14 @@ DEFAULT_AI = {
     2: 7000.0,  # Sand (channel fill): low impedance
 }
 
+# Per-facies rock property distributions: {facies_code: {"rhob": (mean, std), "vp": (mean, std)}}
+# rhob in g/cc, vp in m/s.  AI = rhob * vp.
+DEFAULT_ROCK_PROPERTIES = {
+    0: {"rhob": (2.40, 0.05), "vp": (4200.0, 150.0)},  # Mud (overbank)
+    1: {"rhob": (2.25, 0.05), "vp": (3700.0, 150.0)},  # Bank (levee)
+    2: {"rhob": (2.10, 0.05), "vp": (3200.0, 150.0)},  # Sand (channel fill)
+}
+
 
 def ricker_wavelet(f_dominant, dt, duration):
     """
@@ -44,17 +52,47 @@ def ricker_wavelet(f_dominant, dt, duration):
     return t, wavelet
 
 
-def facies_to_ai(facies_map, ai_values=None):
+def facies_to_ai(facies_map, ai_values=None, rock_properties=None, rng=None):
     """
     Convert facies codes to acoustic impedance values.
+
+    Two modes:
+        - Deterministic (default): ``ai_values`` maps facies code → constant AI.
+        - Stochastic: ``rock_properties`` maps facies code →
+          ``{"rhob": (mean, std), "vp": (mean, std)}``.
+          Per-voxel AI = rhob * vp sampled from normal distributions.
+
+    When ``rock_properties`` is provided it takes precedence over ``ai_values``.
 
     Args:
         facies_map: Integer array with facies codes {0: mud, 1: bank, 2: sand}
         ai_values: Dict mapping facies code → AI value. Uses DEFAULT_AI if None.
+        rock_properties: Dict mapping facies code → {"rhob": (mean, std),
+                         "vp": (mean, std)}. If provided, AI is sampled
+                         stochastically per voxel.
+        rng: numpy ``Generator`` for reproducibility (used only in stochastic
+             mode; ``None`` creates a fresh default generator).
 
     Returns:
         AI map as float32 array (same shape as input)
     """
+    if rock_properties is not None:
+        if rng is None:
+            rng = np.random.default_rng()
+        ai_map = np.zeros_like(facies_map, dtype=np.float32)
+        for code, props in rock_properties.items():
+            mask = facies_map == code
+            n_voxels = int(mask.sum())
+            if n_voxels == 0:
+                continue
+            rhob_mean, rhob_std = props["rhob"]
+            vp_mean, vp_std = props["vp"]
+            rhob = rng.normal(rhob_mean, rhob_std, size=n_voxels)
+            vp = rng.normal(vp_mean, vp_std, size=n_voxels)
+            ai_map[mask] = (rhob * vp).astype(np.float32)
+        return ai_map
+
+    # Deterministic fallback
     if ai_values is None:
         ai_values = DEFAULT_AI
     ai_map = np.zeros_like(facies_map, dtype=np.float32)
@@ -130,7 +168,12 @@ def compute_synthetic_seismic_3d(
     for ix in range(nx):
         for iy in range(ny):
             trace = reflectivity[ix, iy, :]
-            synthetic[ix, iy, :] = np.convolve(trace, wavelet, mode="same")
+            conv = np.convolve(trace, wavelet, mode="same")
+            if conv.shape[0] != nz:
+                # numpy's "same" returns max(len(trace), len(wavelet)); center-crop to trace length.
+                start = (conv.shape[0] - nz) // 2
+                conv = conv[start : start + nz]
+            synthetic[ix, iy, :] = conv
     return synthetic
 
 
@@ -171,6 +214,7 @@ def compute_rms_cube(synthetic_seismic, window_half):
 def generate_rms_from_facies_3d(
     facies_block,
     ai_values=None,
+    rock_properties=None,
     f_dominant=25.0,
     rms_window_half=5,
     noise_level=0.05,
@@ -190,7 +234,12 @@ def generate_rms_from_facies_3d(
 
     Args:
         facies_block: 3D array (nx, ny, nz) with facies codes {0, 1, 2}
-        ai_values: Dict of facies → AI values (uses defaults if None)
+        ai_values: Dict of facies → AI values (used only in deterministic
+                   mode, i.e. when ``rock_properties`` is None).
+        rock_properties: Dict of facies → {"rhob": (mean, std), "vp": (mean, std)}.
+                         When provided, AI is sampled stochastically per voxel
+                         as ``rhob * vp``.  Defaults to ``DEFAULT_ROCK_PROPERTIES``
+                         when both this and ``ai_values`` are None.
         f_dominant: Dominant frequency of Ricker wavelet in Hz
         rms_window_half: Half-window size for RMS computation (in samples)
         noise_level: Standard deviation of additive Gaussian noise
@@ -204,8 +253,22 @@ def generate_rms_from_facies_3d(
     Returns:
         rms_cube: 3D array (nx, ny, nz-1), unnormalized
     """
+    # check if the facies block contains valid codes
+    valid_codes = set(DEFAULT_AI.keys())
+    unique_codes = set(np.unique(facies_block).tolist())
+    if not unique_codes.issubset(valid_codes):
+        raise ValueError(
+            f"Facies block has unexpected codes: {unique_codes - valid_codes}. "
+            f"Expected subset of {valid_codes}."
+        )
+    # Default to stochastic rock-property sampling when neither is specified.
+    if ai_values is None and rock_properties is None:
+        rock_properties = DEFAULT_ROCK_PROPERTIES
+
     # 1. Facies → AI
-    ai_block = facies_to_ai(facies_block, ai_values)
+    ai_block = facies_to_ai(
+        facies_block, ai_values=ai_values, rock_properties=rock_properties, rng=rng
+    )
 
     # 2. AI → Reflectivity
     reflectivity = compute_reflectivity_vertical(ai_block)
@@ -253,5 +316,5 @@ def normalize_cube_to_range(arr, vmin=-1.0, vmax=1.0):
     arr_min = arr.min()
     arr_max = arr.max()
     if arr_max - arr_min < 1e-10:
-        return np.full_like(arr, (vmin + vmax) / 2, dtype=np.float64)
+        return np.full_like(arr, (vmin + vmax) / 2, dtype=np.float32)
     return (arr - arr_min) / (arr_max - arr_min) * (vmax - vmin) + vmin
