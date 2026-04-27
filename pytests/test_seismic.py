@@ -16,7 +16,7 @@ from diffsim.data.seismic import (
     compute_synthetic_seismic_3d,
     facies_to_ai,
     generate_rms_from_facies_3d,
-    normalize_cube_to_range,
+    normalize_rms,
     ricker_wavelet,
 )
 
@@ -413,40 +413,40 @@ class TestGenerateRmsFromFacies3d:
 class TestNormalizeCubeToRange:
     def test_default_range(self):
         arr = np.array([0.0, 5.0, 10.0])
-        result = normalize_cube_to_range(arr)
+        result = normalize_rms(arr)
         np.testing.assert_allclose(result, [-1.0, 0.0, 1.0])
 
     def test_custom_range(self):
         arr = np.array([0.0, 10.0])
-        result = normalize_cube_to_range(arr, vmin=0.0, vmax=1.0)
+        result = normalize_rms(arr, vmin=0.0, vmax=1.0)
         np.testing.assert_allclose(result, [0.0, 1.0])
 
     def test_constant_array_returns_midpoint(self):
         arr = np.full((3, 3), 42.0)
-        result = normalize_cube_to_range(arr, vmin=-1.0, vmax=1.0)
+        result = normalize_rms(arr, vmin=-1.0, vmax=1.0)
         np.testing.assert_allclose(result, 0.0)
 
     def test_preserves_shape(self):
         arr = np.random.default_rng(0).uniform(0, 10, (3, 4, 5))
-        result = normalize_cube_to_range(arr)
+        result = normalize_rms(arr)
         assert result.shape == (3, 4, 5)
 
     def test_output_within_range(self):
         arr = np.random.default_rng(0).uniform(-100, 100, (10, 10))
-        result = normalize_cube_to_range(arr, vmin=-1.0, vmax=1.0)
+        result = normalize_rms(arr, vmin=-1.0, vmax=1.0)
         assert result.min() >= -1.0 - 1e-10
         assert result.max() <= 1.0 + 1e-10
 
     def test_min_maps_to_vmin_max_maps_to_vmax(self):
         arr = np.array([3.0, 7.0, 5.0])
-        result = normalize_cube_to_range(arr, vmin=0.0, vmax=1.0)
+        result = normalize_rms(arr, vmin=0.0, vmax=1.0)
         np.testing.assert_allclose(result[0], 0.0, atol=1e-10)  # min → vmin
         np.testing.assert_allclose(result[1], 1.0, atol=1e-10)  # max → vmax
 
     def test_near_constant_returns_midpoint(self):
         arr = np.full((3,), 5.0)
         arr[1] = 5.0 + 1e-12  # tiny difference, below threshold
-        result = normalize_cube_to_range(arr, vmin=-1.0, vmax=1.0)
+        result = normalize_rms(arr, vmin=-1.0, vmax=1.0)
         np.testing.assert_allclose(result, 0.0, atol=1e-5)
 
 

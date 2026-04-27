@@ -311,7 +311,7 @@ def generate_rms_from_facies_3d(
     return rms_cube.astype(np.float32)
 
 
-def normalize_cube_to_range(arr, vmin=-1.0, vmax=1.0):
+def normalize_rms(arr, vmin=-1.0, vmax=1.0):
     """Normalize array to [vmin, vmax] range."""
     arr_min = arr.min()
     arr_max = arr.max()

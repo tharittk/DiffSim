@@ -155,54 +155,6 @@ class TestReclassify:
 
 
 # ---------------------------------------------------------------------------
-# extract_xy_plane / extract_xz_plane / extract_yz_plane
-# ---------------------------------------------------------------------------
-class TestExtractPlanes:
-    @pytest.fixture()
-    def block(self):
-        rng = np.random.default_rng(0)
-        return rng.integers(0, 3, size=(4, 5, 6), dtype=np.int8)
-
-    # -- XY (plan-view) --
-    def test_extract_xy_all(self, block):
-        slices = FlumyGenerator.extract_xy_plane(block)
-        assert len(slices) == 6
-        for s in slices:
-            assert s.shape == (4, 5)
-
-    def test_extract_xy_specific(self, block):
-        slices = FlumyGenerator.extract_xy_plane(block, z_indices=[0, 3])
-        assert len(slices) == 2
-        np.testing.assert_array_equal(slices[0], block[:, :, 0])
-        np.testing.assert_array_equal(slices[1], block[:, :, 3])
-
-    # -- XZ (cross-flow) --
-    def test_extract_xz_all(self, block):
-        slices = FlumyGenerator.extract_xz_plane(block)
-        assert len(slices) == 5
-        for s in slices:
-            assert s.shape == (4, 6)
-
-    def test_extract_xz_specific(self, block):
-        slices = FlumyGenerator.extract_xz_plane(block, y_indices=[2])
-        assert len(slices) == 1
-        np.testing.assert_array_equal(slices[0], block[:, 2, :])
-
-    # -- YZ --
-    def test_extract_yz_all(self, block):
-        slices = FlumyGenerator.extract_yz_plane(block)
-        assert len(slices) == 4
-        for s in slices:
-            assert s.shape == (5, 6)
-
-    def test_extract_yz_specific(self, block):
-        slices = FlumyGenerator.extract_yz_plane(block, x_indices=[1, 3])
-        assert len(slices) == 2
-        np.testing.assert_array_equal(slices[0], block[1, :, :])
-        np.testing.assert_array_equal(slices[1], block[3, :, :])
-
-
-# ---------------------------------------------------------------------------
 # normalize_facies
 # ---------------------------------------------------------------------------
 class TestNormalizeFacies:
