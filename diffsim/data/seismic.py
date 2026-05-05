@@ -26,9 +26,12 @@ DEFAULT_AI = {
 # Per-facies rock property distributions: {facies_code: {"rhob": (mean, std), "vp": (mean, std)}}
 # rhob in g/cc, vp in m/s.  AI = rhob * vp.
 DEFAULT_ROCK_PROPERTIES = {
-    0: {"rhob": (2.40, 0.05), "vp": (4200.0, 150.0)},  # Mud (overbank)
-    1: {"rhob": (2.25, 0.05), "vp": (3700.0, 150.0)},  # Bank (levee)
-    2: {"rhob": (2.10, 0.05), "vp": (3200.0, 150.0)},  # Sand (channel fill)
+    # brine: AI = 6k -> 8k | vp => (3k, 4k)
+    # gas : AI = 4k -> 8k | vp => (2k, 4k)
+    # shale: AI = 6k -> 9k | vp => (3k, 4.5k)
+    0: {"rhob": (2.00, 0.05), "vp": (4600.0, 300.0)},  # Mud (overbank)
+    1: {"rhob": (2.00, 0.05), "vp": (4300.0, 300.0)},  # Bank (levee)
+    2: {"rhob": (2.00, 0.05), "vp": (3700.0, 300.0)},  # Sand (channel fill)
 }
 
 
@@ -215,12 +218,13 @@ def generate_rms_from_facies_3d(
     facies_block,
     ai_values=None,
     rock_properties=None,
-    f_dominant=25.0,
-    rms_window_half=5,
-    noise_level=0.05,
-    smooth_sigma=1.0,
+    f_dominant=1000,
+    rms_window_half=1,
+    noise_level=0.2,
+    smooth_sigma=None,
     rng=None,
     velocity=2500.0,
+    dx=1.0,
 ):
     """
     Full pipeline: 3D facies block → 3D RMS amplitude cube.
@@ -245,10 +249,13 @@ def generate_rms_from_facies_3d(
         noise_level: Standard deviation of additive Gaussian noise
                      (relative to signal std)
         smooth_sigma: Lateral Gaussian smoothing sigma in grid cells
-                      (simulates Fresnel zone)
+                      (simulates Fresnel zone). If None (default), auto-computed
+                      from the Fresnel zone radius: sigma = sqrt(V * z_mid / f) / dx.
         rng: numpy random Generator for reproducibility (None = global state)
         velocity: Average propagation velocity in m/s used for the internal
               time-to-depth conversion of f_dominant.
+        dx: Lateral grid spacing in meters (used for Fresnel zone calculation
+            when smooth_sigma is None).
 
     Returns:
         rms_cube: 3D array (nx, ny, nz-1), unnormalized
@@ -285,7 +292,13 @@ def generate_rms_from_facies_3d(
     # 4. Synthetic → RMS cube
     rms_cube = compute_rms_cube(synthetic, rms_window_half)
 
-    # 5. Lateral smoothing (simulates finite seismic resolution)
+    # 5. Lateral smoothing (simulates finite seismic resolution / Fresnel zone)
+    if smooth_sigma is None:
+        # Auto-compute from Fresnel zone radius: r_F = sqrt(V * z_mid / f)
+        nz = facies_block.shape[2]
+        z_mid = (nz * dz) / 2.0  # midpoint depth in meters
+        fresnel_radius = np.sqrt(velocity * z_mid / f_dominant)
+        smooth_sigma = fresnel_radius / dx
     if smooth_sigma > 0:
         rms_cube = gaussian_filter(rms_cube, sigma=(smooth_sigma, smooth_sigma, 0.0))
 

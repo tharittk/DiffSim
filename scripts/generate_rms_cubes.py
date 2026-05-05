@@ -24,6 +24,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from diffsim.data.seismic import generate_rms_from_facies_3d
+from diffsim.data.flumy_generator import FlumyGenerator
 
 
 def parse_args():
@@ -42,30 +43,31 @@ def parse_args():
         default="data/flumy3d/rms",
         help="Output directory for RMS .npy files",
     )
-    parser.add_argument(
-        "--f_dominant",
-        type=float,
-        default=25.0,
-        help="Dominant frequency of Ricker wavelet (Hz)",
-    )
+    # parser.add_argument(
+    #     "--f_dominant",
+    #     type=float,
+    #     default=1000.0,
+    #     help="Dominant frequency of Ricker wavelet (Hz)",
+    # )
+    # the nz of generated cube is 30. 14 is about half.
     parser.add_argument(
         "--rms_window_half",
         type=int,
-        default=10,
+        default=1,
         help="Half-window size for RMS computation (samples)",
     )
     parser.add_argument(
         "--noise_level",
         type=float,
-        default=0.05,
+        default=0.2,
         help="Additive noise level (relative to signal std)",
     )
-    parser.add_argument(
-        "--smooth_sigma",
-        type=float,
-        default=1.0,
-        help="Lateral Gaussian smoothing sigma (grid cells)",
-    )
+    # parser.add_argument(
+    #     "--smooth_sigma",
+    #     type=float,
+    #     default=1.0,
+    #     help="Lateral Gaussian smoothing sigma (grid cells)",
+    # )
     parser.add_argument(
         "--seed",
         type=int,
@@ -91,9 +93,9 @@ def main():
         sys.exit(1)
 
     print(f"Processing {len(npy_files)} facies cubes → RMS cubes")
-    print(f"  f_dominant={args.f_dominant}, rms_window_half={args.rms_window_half}")
-    print(f"  noise_level={args.noise_level}, smooth_sigma={args.smooth_sigma}")
-    print()
+    # print(f"  f_dominant={args.f_dominant}, rms_window_half={args.rms_window_half}")
+    # print(f"  noise_level={args.noise_level}, smooth_sigma={args.smooth_sigma}")
+    # print()
 
     rng = np.random.default_rng(args.seed)
 
@@ -106,12 +108,13 @@ def main():
 
         t0 = time.time()
         facies_block = np.load(facies_path)
+        facies_block = FlumyGenerator.reclassify_to_three_facies(facies_block)
+
         rms_cube = generate_rms_from_facies_3d(
             facies_block,
-            f_dominant=args.f_dominant,
             rms_window_half=args.rms_window_half,
             noise_level=args.noise_level,
-            smooth_sigma=args.smooth_sigma,
+            smooth_sigma=None,  # auto-compute from Fresnel zone radius
             rng=rng,
         )
         np.save(out_path, rms_cube)
