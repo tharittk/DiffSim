@@ -40,16 +40,16 @@
             }
         },
         "data": {
-            "train_data": "data/flumy_dataset/train",
-            "test_data": "data/flumy_dataset/test"
+            "train_image": "data/flumy_dataset/train",
+            "test_image": "data/flumy_dataset/test"
         },
         "training": {
-            "epochs": 1000,
+            "epochs": 2,
             "batch_size": 64,
             "lr": 5e-5,
             "loss": "mse",
             "ema_decay": 0.9999,
-            "save_every": 500,
+            "save_every": 1000,
             "checkpoint_every": 10
         },
         "output": {

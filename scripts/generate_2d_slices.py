@@ -31,6 +31,8 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from diffsim.data.flumy_generator import FlumyGenerator
+
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -81,7 +83,7 @@ def parse_args():
     parser.add_argument(
         "--augment",
         action="store_true",
-        default=True,
+        default=False,  # for now, deterministic please
         help="Apply random rotation and flip augmentation",
     )
     parser.add_argument(
@@ -107,6 +109,31 @@ def random_crop(facies_2d, rms_2d, crop_size, rng):
         facies_2d[y : y + crop_size, x : x + crop_size],
         rms_2d[y : y + crop_size, x : x + crop_size],
     )
+
+
+def tile_crop(facies_2d, rms_2d, crop_size=64):
+    """Split a 256x256 slice into non-overlapping tiles on a regular grid.
+
+    Assumes input is exactly 256x256. With crop_size=64 this yields a 4x4
+    grid of 16 tiles. Returns a list of (facies, rms) pairs.
+    """
+    h, w = facies_2d.shape
+    if h != 256 or w != 256:
+        raise ValueError(f"Expected 256x256 input, got ({h},{w})")
+    n_rows = h // crop_size
+    n_cols = w // crop_size
+    tiles = []
+    for row in range(n_rows):
+        for col in range(n_cols):
+            y0 = row * crop_size
+            x0 = col * crop_size
+            tiles.append(
+                (
+                    facies_2d[y0 : y0 + crop_size, x0 : x0 + crop_size],
+                    rms_2d[y0 : y0 + crop_size, x0 : x0 + crop_size],
+                )
+            )
+    return tiles
 
 
 def augment_pair(facies_crop, rms_crop, rng):
@@ -171,20 +198,42 @@ def main():
 
         # Select z-slices (sample from the RMS-valid range)
         nz = min(nz_facies, nz_rms)
-        z_indices = rng.choice(nz, size=min(args.slices_per_cube, nz), replace=False)
-        z_indices.sort()
+        # z_indices = rng.choice(nz, size=min(args.slices_per_cube, nz), replace=False)
+        # do evenly space
+        z_indices = np.linspace(0, nz - 1, num=args.slices_per_cube, dtype=int)
+        # z_indices.sort()
 
         stem = facies_path.stem  # e.g. "ng50_isbx80_seed0"
 
+        facies_3d = FlumyGenerator.reclassify_to_three_facies(facies_3d)
+
+        # for z in z_indices:
+        #     facies_slice = facies_3d[:, :, z]
+        #     rms_slice = rms_3d[:, :, z]
+
+        #     for crop_idx in range(args.crops_per_slice):
+        #         facies_crop, rms_crop = random_crop(
+        #             facies_slice, rms_slice, args.crop_size, rng
+        #         )
+
+        #         if args.augment:
+        #             facies_crop, rms_crop = augment_pair(facies_crop, rms_crop, rng)
+
+        #         # Ensure contiguous arrays with correct dtypes
+        #         facies_crop = np.ascontiguousarray(facies_crop, dtype=np.int8)
+        #         rms_crop = np.ascontiguousarray(rms_crop, dtype=np.float32)
+
+        #         name = f"{stem}_z{z:03d}_c{crop_idx}"
+        #         samples.append((facies_crop, rms_crop, name))
+
+        # Tile-based cropping (no randomness, just a regular grid)
         for z in z_indices:
             facies_slice = facies_3d[:, :, z]
             rms_slice = rms_3d[:, :, z]
 
-            for crop_idx in range(args.crops_per_slice):
-                facies_crop, rms_crop = random_crop(
-                    facies_slice, rms_slice, args.crop_size, rng
-                )
+            tiles = tile_crop(facies_slice, rms_slice, crop_size=args.crop_size)
 
+            for crop_idx, (facies_crop, rms_crop) in enumerate(tiles):
                 if args.augment:
                     facies_crop, rms_crop = augment_pair(facies_crop, rms_crop, rng)
 
@@ -192,7 +241,7 @@ def main():
                 facies_crop = np.ascontiguousarray(facies_crop, dtype=np.int8)
                 rms_crop = np.ascontiguousarray(rms_crop, dtype=np.float32)
 
-                name = f"{stem}_z{z:03d}_c{crop_idx}"
+                name = f"{stem}_z{z:03d}_t{crop_idx}"
                 samples.append((facies_crop, rms_crop, name))
 
     print(f"Generated {len(samples)} total 2D samples")

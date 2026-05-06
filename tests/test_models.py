@@ -308,6 +308,8 @@ def main():
     print("DiffSim Installation Verification")
     print("=" * 60)
 
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"Using: {device=}")
     results = {}
 
     # Run all tests
