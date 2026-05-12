@@ -19,7 +19,7 @@
         "num_head_channels": 32,
         "res_blocks": 2,
         "dropout": 0.2,
-        "predict_type": "epsilon",
+        "predict_type": "x_start",
         "_predict_type_options": [
             "epsilon",
             "x_start"
@@ -44,49 +44,21 @@
             "test_image": "data/flumy_dataset/test"
         },
         "training": {
-            "epochs": 2,
+            "epochs": 500,
             "batch_size": 64,
             "lr": 5e-5,
             "loss": "mse",
             "ema_decay": 0.9999,
-            "save_every": 1000,
-            "checkpoint_every": 10
+            "save_every": 10000,
+            "checkpoint_every": 30
         },
         "output": {
-            "results_dir": "results/case1_flumy_conditional",
-            "model_dir": "model/case1_flumy_conditional",
-            "log_dir": "logs/case1_flumy_conditional"
-        }
-    },
-    "data_generation": {
-        "mode": "full",
-        "n_simulations": 100,
-        "slices_per_sim": 10,
-        "output_dir": "data/flumy_dataset",
-        "seed": 42,
-        "train_fraction": 0.8,
-        "flumy": {
-            "nx": 250,
-            "ny": 250,
-            "mesh": 10,
-            "hmax": 3.0,
-            "ng_range": [
-                30,
-                70
-            ],
-            "isbx_range": [
-                50,
-                100
-            ]
-        },
-        "seismic": {
-            "f_dominant": 25.0,
-            "rms_window_half": 10,
-            "noise_level": 0.05,
-            "smooth_sigma": 1.0
+            "results_dir": "/mnt/sda_data/tharitt/diffsim/results/case1_flumy_conditional",
+            "model_dir": "/mnt/sda_data/tharitt/diffsim/model/case1_flumy_conditional",
+            "log_dir": "/mnt/sda_data/tharitt/diffsim/logs/case1_flumy_conditional"
         }
     },
     "checkpoints": {
-        "conditional": "checkpoints/case1_flumy/conditional.pth"
+        "conditional": "/mnt/sda_data/tharitt/diffsim/checkpoints/case1_flumy/conditional.pth"
     }
 }

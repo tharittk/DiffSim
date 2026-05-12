@@ -41,15 +41,16 @@ def parse_args():
     parser.add_argument(
         "--facies_dir",
         type=str,
-        default="data/flumy3d/facies",
+        default="/mnt/sda_data/tharitt/diffsim/data/flumy3d/facies",
         help="Directory with 3D facies .npy cubes",
     )
     parser.add_argument(
         "--rms_dir",
         type=str,
-        default="data/flumy3d/rms",
+        default="/mnt/sda_data/tharitt/diffsim/data/flumy3d/rms",
         help="Directory with 3D RMS .npy cubes",
     )
+    # output local for fast(er) training
     parser.add_argument(
         "--output_dir",
         type=str,
@@ -83,7 +84,7 @@ def parse_args():
     parser.add_argument(
         "--augment",
         action="store_true",
-        default=False,  # for now, deterministic please
+        default=True,
         help="Apply random rotation and flip augmentation",
     )
     parser.add_argument(
@@ -198,36 +199,39 @@ def main():
 
         # Select z-slices (sample from the RMS-valid range)
         nz = min(nz_facies, nz_rms)
-        # z_indices = rng.choice(nz, size=min(args.slices_per_cube, nz), replace=False)
-        # do evenly space
-        z_indices = np.linspace(0, nz - 1, num=args.slices_per_cube, dtype=int)
-        # z_indices.sort()
+        # Evenly spaced for random crops
+        z_indices_rand = np.linspace(0, nz - 1, num=args.slices_per_cube, dtype=int)
+        # Random selection for tile crops (different z-levels → 2x coverage)
+        z_indices_tile = rng.choice(
+            nz, size=min(args.slices_per_cube, nz), replace=False
+        )
+        z_indices_tile.sort()
 
         stem = facies_path.stem  # e.g. "ng50_isbx80_seed0"
 
         facies_3d = FlumyGenerator.reclassify_to_three_facies(facies_3d)
 
-        # for z in z_indices:
-        #     facies_slice = facies_3d[:, :, z]
-        #     rms_slice = rms_3d[:, :, z]
+        for z in z_indices_rand:
+            facies_slice = facies_3d[:, :, z]
+            rms_slice = rms_3d[:, :, z]
 
-        #     for crop_idx in range(args.crops_per_slice):
-        #         facies_crop, rms_crop = random_crop(
-        #             facies_slice, rms_slice, args.crop_size, rng
-        #         )
+            for crop_idx in range(args.crops_per_slice):
+                facies_crop, rms_crop = random_crop(
+                    facies_slice, rms_slice, args.crop_size, rng
+                )
 
-        #         if args.augment:
-        #             facies_crop, rms_crop = augment_pair(facies_crop, rms_crop, rng)
+                if args.augment:
+                    facies_crop, rms_crop = augment_pair(facies_crop, rms_crop, rng)
 
-        #         # Ensure contiguous arrays with correct dtypes
-        #         facies_crop = np.ascontiguousarray(facies_crop, dtype=np.int8)
-        #         rms_crop = np.ascontiguousarray(rms_crop, dtype=np.float32)
+                # Ensure contiguous arrays with correct dtypes
+                facies_crop = np.ascontiguousarray(facies_crop, dtype=np.int8)
+                rms_crop = np.ascontiguousarray(rms_crop, dtype=np.float32)
 
-        #         name = f"{stem}_z{z:03d}_c{crop_idx}"
-        #         samples.append((facies_crop, rms_crop, name))
+                name = f"{stem}_z{z:03d}_c{crop_idx}_rand"
+                samples.append((facies_crop, rms_crop, name))
 
         # Tile-based cropping (no randomness, just a regular grid)
-        for z in z_indices:
+        for z in z_indices_tile:
             facies_slice = facies_3d[:, :, z]
             rms_slice = rms_3d[:, :, z]
 
@@ -241,8 +245,13 @@ def main():
                 facies_crop = np.ascontiguousarray(facies_crop, dtype=np.int8)
                 rms_crop = np.ascontiguousarray(rms_crop, dtype=np.float32)
 
-                name = f"{stem}_z{z:03d}_t{crop_idx}"
+                name = f"{stem}_z{z:03d}_t{crop_idx}_tile"
                 samples.append((facies_crop, rms_crop, name))
+
+    print(
+        f"generated {len(z_indices_rand) * args.crops_per_slice} random crops per cube"
+    )
+    print(f"generated {len(z_indices_tile) * len(tiles)} tile crops per cube")
 
     print(f"Generated {len(samples)} total 2D samples")
 
