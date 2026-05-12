@@ -50,7 +50,7 @@ from diffsim.data.flumy_generator import (
 # ---------------------------------------------------------------------------
 # Facies colormap
 # ---------------------------------------------------------------------------
-FACIES_COLORS = {0: "#8B4513", 1: "#DAA520", 2: "#FFD700"}  # mud  # bank  # sand
+FACIES_COLORS = {0: "#6C6C6CE9", 1: "#8B4513", 2: "#FFD700"}  # mud  # bank  # sand
 FACIES_CMAP = mcolors.ListedColormap([FACIES_COLORS[i] for i in range(3)])
 FACIES_NORM = mcolors.BoundaryNorm([-0.5, 0.5, 1.5, 2.5], FACIES_CMAP.N)
 
@@ -236,7 +236,7 @@ def plot_rms(
     ax: plt.Axes, rms: np.ndarray, title: str = "RMS", show_colorbar: bool = True
 ):
     """Plot an RMS amplitude map."""
-    im = ax.imshow(rms, cmap="seismic", origin="upper")
+    im = ax.imshow(rms, cmap="gist_rainbow_r", origin="upper")
     ax.set_title(title, fontsize=11)
     ax.set_xticks([])
     ax.set_yticks([])
@@ -806,3 +806,880 @@ def _ema_smooth(values: np.ndarray, alpha: float) -> np.ndarray:
     for i in range(1, len(values)):
         smoothed[i] = alpha * smoothed[i - 1] + (1 - alpha) * values[i]
     return smoothed
+
+
+# ===========================================================================
+# SLIDE GENERATION UTILITIES
+# ===========================================================================
+# Functions below are designed to produce presentation-ready figures for each
+# slide in the slides_plan.md.  Each returns a matplotlib Figure that can be
+# saved with fig.savefig(...).
+# ===========================================================================
+
+# 9-facies colormap (Flumy raw codes)
+_RAW_FACIES_LABELS = {
+    -1: "Background",
+    1: "Channel Lag",
+    2: "Point Bar (lower)",
+    3: "Point Bar (upper)",
+    4: "Point Bar (top)",
+    5: "Levee (inner)",
+    6: "Levee (outer)",
+    7: "Crevasse Splay",
+    8: "Overbank (proximal)",
+    9: "Overbank (distal)",
+}
+_RAW_FACIES_COLORS_LIST = [
+    "#4A4A4A",  # -1 Background (dark grey)
+    "#FFD700",  # 1 Channel Lag (gold)
+    "#FFA500",  # 2 Point Bar lower (orange)
+    "#FF8C00",  # 3 Point Bar upper (dark orange)
+    "#FF6600",  # 4 Point Bar top (deep orange)
+    "#C8B060",  # 5 Levee inner (khaki/tan)
+    "#A09050",  # 6 Levee outer (dark tan)
+    "#D4A850",  # 7 Crevasse Splay (sandy brown)
+    "#808080",  # 8 Overbank proximal (grey)
+    "#606060",  # 9 Overbank distal (dark grey)
+]
+
+
+def load_3d_cube(
+    cube_name: str = "ng10_isbx100_seed1",
+    data_dir: str = "/mnt/sda_data/tharitt/diffsim/data/flumy3d",
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Load a matched 3D facies/RMS cube pair.
+
+    Args:
+        cube_name: Stem name of the .npy file (without extension).
+        data_dir: Root directory containing facies/ and rms/ subdirectories.
+
+    Returns:
+        (facies_3d, rms_3d): Raw facies cube (int8) and RMS cube (float32).
+    """
+    data_dir = Path(data_dir)
+    facies_3d = np.load(data_dir / "facies" / f"{cube_name}.npy")
+    rms_3d = np.load(data_dir / "rms" / f"{cube_name}.npy")
+    return facies_3d, rms_3d
+
+
+def plot_cube_3d(
+    cube: np.ndarray,
+    cmap="viridis",
+    norm=None,
+    slices: Optional[Tuple[int, int, int]] = None,
+    title: str = "3D Cube",
+    figsize: Tuple[int, int] = (10, 8),
+    elev: float = 25,
+    azim: float = -60,
+    alpha: float = 1.0,
+    facies_9class: bool = False,
+    save_path: Optional[str] = None,
+):
+    """
+    Render a static 3D cube image with three visible faces showing mid-slices.
+
+    Each face of the cube displays the data slice at the given index:
+      - Top face (XY): z-slice
+      - Front face (XZ): y-slice
+      - Right face (YZ): x-slice
+
+    Args:
+        cube: 3D array (nx, ny, nz).
+        cmap: Colormap name or ListedColormap instance.
+        norm: Optional matplotlib norm (e.g. FACIES_NORM).
+        slices: (x_idx, y_idx, z_idx) slice positions. Defaults to midpoints.
+        title: Figure title.
+        figsize: Figure size.
+        elev: Elevation viewing angle in degrees.
+        azim: Azimuth viewing angle in degrees.
+        alpha: Face transparency (1.0 = opaque).
+        facies_9class: If True, remap raw Flumy codes {-1, 1..9} to sequential
+            indices and use the 9-class colormap/labels automatically (overrides
+            cmap and norm).
+        save_path: Optional save path.
+
+    Returns:
+        matplotlib Figure.
+    """
+    from matplotlib.colors import Normalize
+    from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
+
+    nx, ny, nz = cube.shape
+    if slices is None:
+        slices = (nx // 2, ny // 2, nz // 2)
+    xi, yi, zi = slices
+
+    # Remap raw 9-class Flumy codes to sequential indices
+    if facies_9class:
+        code_order = [-1, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+        mapped = np.zeros_like(cube, dtype=np.int8)
+        for seq_idx, code in enumerate(code_order):
+            mapped[cube == code] = seq_idx
+        cube = mapped
+        cmap = mcolors.ListedColormap(_RAW_FACIES_COLORS_LIST)
+        norm = mcolors.BoundaryNorm(np.arange(-0.5, 10.5, 1), cmap.N)
+
+    # Resolve colormap
+    if isinstance(cmap, str):
+        cmap_obj = plt.get_cmap(cmap)
+    else:
+        cmap_obj = cmap
+    if norm is None:
+        norm = Normalize(vmin=np.nanmin(cube), vmax=np.nanmax(cube))
+
+    def _data_to_rgba(data_2d):
+        return cmap_obj(norm(data_2d.astype(float)))
+
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111, projection="3d")
+
+    # --- Top face (XY plane at z=zi) ---
+    xy_slice = cube[:, :, zi]
+    xs = np.arange(nx + 1)
+    ys = np.arange(ny + 1)
+    Xs, Ys = np.meshgrid(xs, ys, indexing="ij")
+    Zs = np.full_like(Xs, float(zi), dtype=float)
+    colors_top = _data_to_rgba(xy_slice)
+    ax.plot_surface(
+        Xs,
+        Ys,
+        Zs,
+        facecolors=colors_top,
+        shade=False,
+        alpha=alpha,
+        rstride=1,
+        cstride=1,
+    )
+
+    # --- Front face (XZ plane at y=0) ---
+    xz_slice = cube[:, 0, :]
+    xs = np.arange(nx + 1)
+    zs = np.arange(nz + 1)
+    Xs_f, Zs_f = np.meshgrid(xs, zs, indexing="ij")
+    Ys_f = np.full_like(Xs_f, 0.0, dtype=float)
+    colors_front = _data_to_rgba(xz_slice)
+    ax.plot_surface(
+        Xs_f,
+        Ys_f,
+        Zs_f,
+        facecolors=colors_front,
+        shade=False,
+        alpha=alpha,
+        rstride=1,
+        cstride=1,
+    )
+
+    # --- Right face (YZ plane at x=nx-1) ---
+    yz_slice = cube[-1, :, :]
+    ys = np.arange(ny + 1)
+    zs = np.arange(nz + 1)
+    Ys_r, Zs_r = np.meshgrid(ys, zs, indexing="ij")
+    Xs_r = np.full_like(Ys_r, float(nx), dtype=float)
+    colors_right = _data_to_rgba(yz_slice)
+    ax.plot_surface(
+        Xs_r,
+        Ys_r,
+        Zs_r,
+        facecolors=colors_right,
+        shade=False,
+        alpha=alpha,
+        rstride=1,
+        cstride=1,
+    )
+
+    # --- Mid-slice cross-sections (cut faces) ---
+    # Y-slice (front cut at y=yi)
+    xz_mid = cube[:, yi, :]
+    Xs_m, Zs_m = np.meshgrid(np.arange(nx + 1), np.arange(nz + 1), indexing="ij")
+    Ys_m = np.full_like(Xs_m, float(yi), dtype=float)
+    colors_ymid = _data_to_rgba(xz_mid)
+    ax.plot_surface(
+        Xs_m,
+        Ys_m,
+        Zs_m,
+        facecolors=colors_ymid,
+        shade=False,
+        alpha=alpha,
+        rstride=1,
+        cstride=1,
+    )
+
+    # X-slice (side cut at x=xi)
+    yz_mid = cube[xi, :, :]
+    Ys_s, Zs_s = np.meshgrid(np.arange(ny + 1), np.arange(nz + 1), indexing="ij")
+    Xs_s = np.full_like(Ys_s, float(xi), dtype=float)
+    colors_xmid = _data_to_rgba(yz_mid)
+    ax.plot_surface(
+        Xs_s,
+        Ys_s,
+        Zs_s,
+        facecolors=colors_xmid,
+        shade=False,
+        alpha=alpha,
+        rstride=1,
+        cstride=1,
+    )
+
+    ax.set_xlabel("X")
+    ax.set_ylabel("Y")
+    ax.set_zlabel("Z")
+    ax.set_xlim(0, nx)
+    ax.set_ylim(0, ny)
+    ax.set_zlim(0, nz)
+    ax.view_init(elev=elev, azim=azim)
+    ax.set_title(title, fontsize=13, pad=15)
+
+    # Add a colorbar via a ScalarMappable
+    import matplotlib.cm as mcm
+
+    sm = mcm.ScalarMappable(cmap=cmap_obj, norm=norm)
+    sm.set_array([])
+    if facies_9class:
+        code_order = [-1, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+        cbar = plt.colorbar(
+            sm, ax=ax, fraction=0.03, pad=0.1, shrink=0.6, ticks=range(10)
+        )
+        cbar.ax.set_yticklabels([_RAW_FACIES_LABELS[c] for c in code_order], fontsize=7)
+    else:
+        plt.colorbar(sm, ax=ax, fraction=0.03, pad=0.1, shrink=0.6)
+
+    fig.tight_layout()
+    if save_path:
+        fig.savefig(save_path, dpi=200, bbox_inches="tight")
+        print(f"Saved → {save_path}")
+    plt.show()
+    return fig
+
+
+def plot_3d_facies_9class(
+    facies_3d: np.ndarray,
+    z_index: int = 5,
+    figsize: Tuple[int, int] = (12, 5),
+    save_path: Optional[str] = None,
+):
+    """
+    Slide 1a: Show a z-slice of the 3D facies cube with all 9 original Flumy facies.
+
+    Args:
+        facies_3d: Raw 3D facies array with codes {-1, 1..9}.
+        z_index: Depth slice index.
+        figsize: Figure size.
+        save_path: Optional save path.
+
+    Returns:
+        matplotlib Figure.
+    """
+    slice_2d = facies_3d[:, :, z_index]
+
+    # Map raw codes (-1, 1..9) to sequential indices (0..9) for colormap
+    code_order = [-1, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    mapped = np.zeros_like(slice_2d, dtype=np.int8)
+    for seq_idx, code in enumerate(code_order):
+        mapped[slice_2d == code] = seq_idx
+
+    cmap = mcolors.ListedColormap(_RAW_FACIES_COLORS_LIST)
+    norm = mcolors.BoundaryNorm(np.arange(-0.5, 10.5, 1), cmap.N)
+
+    fig, ax = plt.subplots(figsize=figsize)
+    im = ax.imshow(mapped, cmap=cmap, norm=norm, origin="upper")
+    ax.set_title(f"Original 9-Facies Classification (z={z_index})", fontsize=13)
+    ax.set_xlabel("X")
+    ax.set_ylabel("Y")
+
+    cbar = plt.colorbar(im, ax=ax, ticks=range(10), fraction=0.046, pad=0.04)
+    cbar.ax.set_yticklabels([_RAW_FACIES_LABELS[c] for c in code_order], fontsize=8)
+
+    fig.tight_layout()
+    if save_path:
+        fig.savefig(save_path, dpi=200, bbox_inches="tight")
+        print(f"Saved → {save_path}")
+    plt.show()
+    return fig
+
+
+def plot_3d_facies_reclassification(
+    facies_3d: np.ndarray,
+    z_index: int = 5,
+    figsize: Tuple[int, int] = (16, 5),
+    save_path: Optional[str] = None,
+):
+    """
+    Slide 1b: Side-by-side comparison of 9-class and 3-class facies.
+
+    Args:
+        facies_3d: Raw 3D facies array with codes {-1, 1..9}.
+        z_index: Depth slice index.
+        figsize: Figure size.
+        save_path: Optional save path.
+
+    Returns:
+        matplotlib Figure.
+    """
+    from diffsim.data.flumy_generator import FlumyGenerator
+
+    slice_raw = facies_3d[:, :, z_index]
+    facies_3class = FlumyGenerator.reclassify_to_three_facies(facies_3d)
+    slice_3class = facies_3class[:, :, z_index]
+
+    # Map raw codes
+    code_order = [-1, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    mapped_raw = np.zeros_like(slice_raw, dtype=np.int8)
+    for seq_idx, code in enumerate(code_order):
+        mapped_raw[slice_raw == code] = seq_idx
+
+    cmap_raw = mcolors.ListedColormap(_RAW_FACIES_COLORS_LIST)
+    norm_raw = mcolors.BoundaryNorm(np.arange(-0.5, 10.5, 1), cmap_raw.N)
+
+    fig, axes = plt.subplots(1, 2, figsize=figsize)
+
+    # Left: 9-class
+    im0 = axes[0].imshow(mapped_raw, cmap=cmap_raw, norm=norm_raw, origin="upper")
+    axes[0].set_title("Original (9 facies)", fontsize=12)
+    axes[0].set_xlabel("X")
+    axes[0].set_ylabel("Y")
+    cbar0 = plt.colorbar(im0, ax=axes[0], ticks=range(10), fraction=0.046, pad=0.04)
+    cbar0.ax.set_yticklabels([_RAW_FACIES_LABELS[c] for c in code_order], fontsize=7)
+
+    # Right: 3-class
+    im1 = axes[1].imshow(
+        slice_3class, cmap=FACIES_CMAP, norm=FACIES_NORM, origin="upper"
+    )
+    axes[1].set_title("Reclassified (3 facies)", fontsize=12)
+    axes[1].set_xlabel("X")
+    axes[1].set_ylabel("Y")
+    cbar1 = plt.colorbar(im1, ax=axes[1], ticks=[0, 1, 2], fraction=0.046, pad=0.04)
+    cbar1.ax.set_yticklabels(["Mud", "Bank", "Sand"], fontsize=9)
+
+    fig.suptitle(f"Facies Reclassification (z={z_index})", fontsize=14, y=1.02)
+    fig.tight_layout()
+    if save_path:
+        fig.savefig(save_path, dpi=200, bbox_inches="tight")
+        print(f"Saved → {save_path}")
+    plt.show()
+    return fig
+
+
+def plot_facies_to_rms_pipeline(
+    facies_3d: np.ndarray,
+    rms_3d: np.ndarray,
+    z_index: int = 5,
+    figsize: Tuple[int, int] = (22, 4),
+    save_path: Optional[str] = None,
+):
+    """
+    Slide 2: Show how the 3D facies cube is converted to a 3D RMS cube.
+
+    Displays: 3-class Facies → AI → Reflectivity → Synthetic Seismic → RMS
+
+    Args:
+        facies_3d: Raw 3D facies array (will be reclassified internally).
+        rms_3d: Pre-computed RMS cube.
+        z_index: Depth slice index.
+        figsize: Figure size.
+        save_path: Optional save path.
+    """
+    from diffsim.data.flumy_generator import FlumyGenerator
+    from diffsim.data.seismic import (
+        facies_to_ai,
+        DEFAULT_ROCK_PROPERTIES,
+        compute_reflectivity_vertical,
+        compute_synthetic_seismic_3d,
+        compute_rms_cube,
+    )
+
+    facies_reclass = FlumyGenerator.reclassify_to_three_facies(facies_3d)
+    facies_slice = facies_reclass[:, :, z_index]
+
+    # Compute AI for the full 3D cube so we can derive reflectivity & synthetic
+    rng = np.random.default_rng(42)
+    nx, ny, nz = facies_reclass.shape
+    ai_3d = np.empty((nx, ny, nz), dtype=np.float32)
+    for zi in range(nz):
+        ai_3d[:, :, zi] = facies_to_ai(
+            facies_reclass[:, :, zi],
+            rock_properties=DEFAULT_ROCK_PROPERTIES,
+            rng=rng,
+        )
+
+    ai_slice = ai_3d[:, :, z_index]
+
+    # Reflectivity & synthetic seismic via proper seismic forward modeling
+    reflectivity_3d = compute_reflectivity_vertical(ai_3d)
+    synthetic_3d = compute_synthetic_seismic_3d(reflectivity_3d)
+
+    # Map z_index into reflectivity/synthetic z-axis (nz-1 layers)
+    refl_z = min(z_index, reflectivity_3d.shape[2] - 1)
+    reflectivity_slice = reflectivity_3d[:, :, refl_z]
+    synthetic_slice = synthetic_3d[:, :, refl_z]
+
+    # RMS slice (pre-computed)
+    rms_z = min(z_index, rms_3d.shape[2] - 1)
+    rms_slice = rms_3d[:, :, rms_z]
+
+    fig, axes = plt.subplots(1, 4, figsize=figsize)
+
+    # Facies
+    im0 = axes[0].imshow(
+        facies_slice, cmap=FACIES_CMAP, norm=FACIES_NORM, origin="upper"
+    )
+    axes[0].set_title("① Facies (3-class)", fontsize=10)
+    plt.colorbar(
+        im0, ax=axes[0], ticks=[0, 1, 2], fraction=0.046, pad=0.04
+    ).ax.set_yticklabels(["Mud", "Bank", "Sand"], fontsize=7)
+
+    # AI
+    im1 = axes[1].imshow(ai_slice, cmap="gray_r", origin="upper")
+    axes[1].set_title("② Acoustic Impedance", fontsize=10)
+    plt.colorbar(im1, ax=axes[1], fraction=0.046, pad=0.04)
+
+    # # Reflectivity
+    # im2 = axes[2].imshow(reflectivity_slice, cmap="gray_r", origin="upper")
+    # axes[2].set_title("③ Reflectivity", fontsize=10)
+    # plt.colorbar(im2, ax=axes[2], fraction=0.046, pad=0.04)
+
+    # Synthetic seismic/
+    im3 = axes[2].imshow(synthetic_slice, cmap="gray_r", origin="upper")
+    axes[2].set_title("③ Synthetic Seismic\n(Reflectivity ⊛ Ricker)", fontsize=10)
+    plt.colorbar(im3, ax=axes[2], fraction=0.046, pad=0.04)
+
+    # RMS
+    im4 = axes[3].imshow(rms_slice, cmap="gist_rainbow_r", origin="upper")
+    axes[3].set_title("④ RMS Amplitude", fontsize=10)
+    plt.colorbar(im4, ax=axes[3], fraction=0.046, pad=0.04)
+
+    for ax in axes:
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+    fig.suptitle("Seismic Forward Modeling Pipeline", fontsize=14, y=1.02)
+    fig.tight_layout()
+    if save_path:
+        fig.savefig(save_path, dpi=200, bbox_inches="tight")
+        print(f"Saved → {save_path}")
+    plt.show()
+    return fig
+
+
+def plot_slicing_and_cropping(
+    facies_3d: np.ndarray,
+    rms_3d: np.ndarray,
+    z_index: int = 5,
+    crop_size: int = 64,
+    num_crops: int = 3,
+    seed: int = 42,
+    figsize: Tuple[int, int] = (18, 8),
+    save_path: Optional[str] = None,
+):
+    """
+    Slide 3: Show how 3D cubes are sliced at depth z and randomly cropped to 64x64.
+
+    Top row: full 256x256 slice with crop rectangles drawn.
+    Bottom row: the cropped 64x64 patches (facies + RMS pairs).
+
+    Args:
+        facies_3d: Raw 3D facies array.
+        rms_3d: 3D RMS cube.
+        z_index: Depth slice.
+        crop_size: Crop size (64).
+        num_crops: Number of random crops to show.
+        seed: Random seed.
+        figsize: Figure size.
+        save_path: Optional save path.
+    """
+    from diffsim.data.flumy_generator import FlumyGenerator
+    import matplotlib.patches as mpatches
+
+    facies_reclass = FlumyGenerator.reclassify_to_three_facies(facies_3d)
+    facies_slice = facies_reclass[:, :, z_index]
+    rms_z = min(z_index, rms_3d.shape[2] - 1)
+    rms_slice = rms_3d[:, :, rms_z]
+
+    rng = np.random.default_rng(seed)
+    h, w = facies_slice.shape
+    crops = []
+    for _ in range(num_crops):
+        y = rng.integers(0, h - crop_size + 1)
+        x = rng.integers(0, w - crop_size + 1)
+        crops.append((y, x))
+
+    rect_colors = plt.cm.Set1(np.linspace(0, 1, num_crops))
+
+    # Use the full slice's color range for all RMS panels
+    rms_vmin, rms_vmax = float(rms_slice.min()), float(rms_slice.max())
+
+    fig = plt.figure(figsize=figsize)
+    gs = fig.add_gridspec(2, num_crops + 1, width_ratios=[2] + [1] * num_crops)
+
+    # Top-left: full facies slice with crop boxes
+    ax_full_f = fig.add_subplot(gs[0, 0])
+    ax_full_f.imshow(facies_slice, cmap=FACIES_CMAP, norm=FACIES_NORM, origin="upper")
+    ax_full_f.set_title(f"Full Facies Slice (z={z_index})\n256×256", fontsize=10)
+    ax_full_f.set_xticks([])
+    ax_full_f.set_yticks([])
+
+    # Top-right equivalent: full RMS slice with crop boxes
+    ax_full_r = fig.add_subplot(gs[1, 0])
+    ax_full_r.imshow(
+        rms_slice, cmap="gist_rainbow_r", vmin=rms_vmin, vmax=rms_vmax, origin="upper"
+    )
+    ax_full_r.set_title(f"Full RMS Slice (z={z_index})\n256×256", fontsize=10)
+    ax_full_r.set_xticks([])
+    ax_full_r.set_yticks([])
+
+    for i, (y, x) in enumerate(crops):
+        color = rect_colors[i]
+        for ax_full in [ax_full_f, ax_full_r]:
+            rect = mpatches.Rectangle(
+                (x, y),
+                crop_size,
+                crop_size,
+                linewidth=2,
+                edgecolor=color,
+                facecolor="none",
+            )
+            ax_full.add_patch(rect)
+
+        # Cropped facies
+        ax_cf = fig.add_subplot(gs[0, i + 1])
+        ax_cf.imshow(
+            facies_slice[y : y + crop_size, x : x + crop_size],
+            cmap=FACIES_CMAP,
+            norm=FACIES_NORM,
+            origin="upper",
+        )
+        ax_cf.set_title(f"Crop {i + 1}\n{crop_size}×{crop_size}", fontsize=9)
+        ax_cf.set_xticks([])
+        ax_cf.set_yticks([])
+        for spine in ax_cf.spines.values():
+            spine.set_edgecolor(color)
+            spine.set_linewidth(2)
+
+        # Cropped RMS
+        ax_cr = fig.add_subplot(gs[1, i + 1])
+        ax_cr.imshow(
+            rms_slice[y : y + crop_size, x : x + crop_size],
+            cmap="gist_rainbow_r",
+            vmin=rms_vmin,
+            vmax=rms_vmax,
+            origin="upper",
+        )
+        ax_cr.set_title(f"Crop {i + 1}\n{crop_size}×{crop_size}", fontsize=9)
+        ax_cr.set_xticks([])
+        ax_cr.set_yticks([])
+        for spine in ax_cr.spines.values():
+            spine.set_edgecolor(color)
+            spine.set_linewidth(2)
+
+    fig.suptitle(
+        "Slicing & Random Cropping: 3D Cube → 2D Training Patches", fontsize=14, y=1.02
+    )
+    fig.tight_layout()
+    if save_path:
+        fig.savefig(save_path, dpi=200, bbox_inches="tight")
+        print(f"Saved → {save_path}")
+    plt.show()
+    return fig
+
+
+def plot_diffusion_training_schematic(
+    facies_patch: Optional[np.ndarray] = None,
+    rms_patch: Optional[np.ndarray] = None,
+    num_noise_levels: int = 5,
+    figsize: Tuple[int, int] = (18, 6),
+    save_path: Optional[str] = None,
+):
+    """
+    Slide 4: Show how 2D facies patches are fed to the diffusion network.
+
+    Illustrates the forward diffusion (adding noise) and the reverse process.
+    Top row: progressively noised facies (t=0 → T).
+    Bottom row: RMS conditioning (constant) + arrow → UNet → denoised output.
+
+    Args:
+        facies_patch: (64, 64) int8 facies. If None, loads from test dataset.
+        rms_patch: (64, 64) float32 RMS. If None, loads from test dataset.
+        num_noise_levels: Number of intermediate noise steps to show.
+        figsize: Figure size.
+        save_path: Optional save path.
+    """
+    from diffsim.data.flumy_generator import normalize_facies
+    from diffsim.data.seismic import normalize_rms
+
+    # Load a sample if not provided
+    if facies_patch is None or rms_patch is None:
+        test_dir = _PROJECT_ROOT / "data" / "flumy_dataset" / "test"
+        facies_files = sorted((test_dir / "facies").glob("*.npy"))
+        rms_files = sorted((test_dir / "rms").glob("*.npy"))
+        facies_patch = np.load(facies_files[0])
+        rms_patch = np.load(rms_files[0])
+
+    facies_norm = normalize_facies(facies_patch).astype(np.float32)
+    rms_norm = normalize_rms(rms_patch, vmin=-1.0, vmax=1.0)
+
+    # Simulate forward diffusion (add noise at various levels)
+    rng = np.random.default_rng(42)
+    noise = rng.standard_normal(facies_norm.shape).astype(np.float32)
+    t_fracs = np.linspace(0, 1, num_noise_levels)
+    noisy_images = []
+    for t in t_fracs:
+        alpha = 1.0 - t  # simplified schedule
+        noisy = np.sqrt(alpha) * facies_norm + np.sqrt(1 - alpha) * noise
+        noisy_images.append(noisy)
+
+    ncols = num_noise_levels + 1  # +1 for RMS conditioning
+    fig, axes = plt.subplots(2, ncols, figsize=figsize)
+
+    # Top row: forward diffusion (progressive noise)
+    axes[0, 0].set_ylabel("Forward\nDiffusion\n(add noise)", fontsize=9)
+    for i, (t, img) in enumerate(zip(t_fracs, noisy_images)):
+        axes[0, i].imshow(img, cmap="gray", vmin=-1.5, vmax=1.5, origin="upper")
+        if i == 0:
+            axes[0, i].set_title("x₀ (clean)", fontsize=9)
+        elif i == num_noise_levels - 1:
+            axes[0, i].set_title(f"x_T (pure noise)", fontsize=9)
+        else:
+            axes[0, i].set_title(f"t={t:.1f}", fontsize=9)
+        axes[0, i].set_xticks([])
+        axes[0, i].set_yticks([])
+    # Last col top: empty (placeholder for arrow)
+    axes[0, -1].axis("off")
+    axes[0, -1].text(
+        0.5,
+        0.5,
+        "→ UNet →\nDenoises",
+        ha="center",
+        va="center",
+        fontsize=11,
+        style="italic",
+        transform=axes[0, -1].transAxes,
+    )
+
+    # Bottom row: RMS conditioning + reverse outputs
+    axes[1, 0].imshow(rms_norm, cmap="gist_rainbow_r", origin="upper")
+    axes[1, 0].set_title("RMS Conditioning\n(input to UNet)", fontsize=9)
+    axes[1, 0].set_xticks([])
+    axes[1, 0].set_yticks([])
+    axes[1, 0].set_ylabel("Reverse\nProcess\n(denoise)", fontsize=9)
+
+    # Simulate reverse (just show decreasing noise for illustration)
+    for i in range(1, num_noise_levels):
+        t_rev = t_fracs[num_noise_levels - 1 - i]
+        alpha = 1.0 - t_rev
+        denoised = np.sqrt(alpha) * facies_norm + np.sqrt(1 - alpha) * noise * 0.3
+        axes[1, i].imshow(denoised, cmap="gray", vmin=-1.5, vmax=1.5, origin="upper")
+        axes[1, i].set_title(f"Denoise step {i}", fontsize=9)
+        axes[1, i].set_xticks([])
+        axes[1, i].set_yticks([])
+
+    # Final output
+    axes[1, -1].imshow(facies_patch, cmap=FACIES_CMAP, norm=FACIES_NORM, origin="upper")
+    axes[1, -1].set_title("Output Facies\n(classified)", fontsize=9)
+    axes[1, -1].set_xticks([])
+    axes[1, -1].set_yticks([])
+
+    fig.suptitle("Conditional Diffusion Training: RMS → Facies", fontsize=14, y=1.02)
+    fig.tight_layout()
+    if save_path:
+        fig.savefig(save_path, dpi=200, bbox_inches="tight")
+        print(f"Saved → {save_path}")
+    plt.show()
+    return fig
+
+
+def plot_3d_cube_orthogonal(
+    cube: np.ndarray,
+    cmap="viridis",
+    norm=None,
+    slices: Optional[Tuple[int, int, int]] = None,
+    title: str = "3D Cube",
+    figsize: Tuple[int, int] = (14, 4),
+    save_path: Optional[str] = None,
+):
+    """
+    Show 3 orthogonal slices (XY, XZ, YZ) through a 3D volume.
+
+    Useful for visualizing the full 3D structure of facies or RMS cubes.
+
+    Args:
+        cube: 3D array (nx, ny, nz).
+        cmap: Colormap name or instance.
+        norm: Optional norm (e.g. FACIES_NORM for facies).
+        slices: (x_idx, y_idx, z_idx) slice positions. Defaults to midpoints.
+        title: Figure title.
+        figsize: Figure size.
+        save_path: Optional save path.
+    """
+    nx, ny, nz = cube.shape
+    if slices is None:
+        slices = (nx // 2, ny // 2, nz // 2)
+    xi, yi, zi = slices
+
+    fig, axes = plt.subplots(1, 3, figsize=figsize)
+
+    # XY slice (plan view)
+    axes[0].imshow(cube[:, :, zi], cmap=cmap, norm=norm, origin="upper", aspect="equal")
+    axes[0].set_title(f"Plan view (z={zi})", fontsize=10)
+    axes[0].set_xlabel("X")
+    axes[0].set_ylabel("Y")
+
+    # XZ slice (cross-section along Y=yi)
+    axes[1].imshow(
+        cube[:, yi, :].T, cmap=cmap, norm=norm, origin="upper", aspect="auto"
+    )
+    axes[1].set_title(f"Cross-section (y={yi})", fontsize=10)
+    axes[1].set_xlabel("X")
+    axes[1].set_ylabel("Z")
+
+    # YZ slice (cross-section along X=xi)
+    axes[2].imshow(
+        cube[xi, :, :].T, cmap=cmap, norm=norm, origin="upper", aspect="auto"
+    )
+    axes[2].set_title(f"Cross-section (x={xi})", fontsize=10)
+    axes[2].set_xlabel("Y")
+    axes[2].set_ylabel("Z")
+
+    for ax in axes:
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+    fig.suptitle(title, fontsize=14, y=1.02)
+    fig.tight_layout()
+    if save_path:
+        fig.savefig(save_path, dpi=200, bbox_inches="tight")
+        print(f"Saved → {save_path}")
+    plt.show()
+    return fig
+
+
+def plot_predict_type_explanation(
+    figsize: Tuple[int, int] = (16, 5),
+    save_path: Optional[str] = None,
+):
+    """
+    Slide 6 supporting: Diagram explaining the two predict_type approaches.
+
+    Left: predict ε (noise) then subtract to get x₀.
+    Right: predict x₀ directly.
+
+    Returns a schematic figure (no data needed).
+    """
+    fig, axes = plt.subplots(1, 2, figsize=figsize)
+
+    # Epsilon prediction schematic
+    ax = axes[0]
+    ax.set_xlim(0, 10)
+    ax.set_ylim(0, 6)
+    ax.set_aspect("equal")
+    ax.axis("off")
+    ax.set_title(
+        "Scenario A: Predict Noise (ε)", fontsize=12, fontweight="bold", color="#1f77b4"
+    )
+
+    # Boxes
+    boxes = [
+        (0.5, 4, "x_t\n(noisy)"),
+        (4, 4, "UNet"),
+        (7.5, 4, "ε̂\n(predicted\nnoise)"),
+        (7.5, 1, "x̂₀ = x_t − √(1−ᾱ)·ε̂\n/ √ᾱ"),
+    ]
+    for x, y, txt in boxes:
+        ax.add_patch(
+            plt.Rectangle(
+                (x, y - 0.8),
+                2,
+                1.6,
+                fill=True,
+                facecolor="#e3f2fd",
+                edgecolor="#1f77b4",
+                linewidth=2,
+            )
+        )
+        ax.text(x + 1, y, txt, ha="center", va="center", fontsize=8)
+
+    ax.annotate(
+        "",
+        xy=(3.9, 4),
+        xytext=(2.6, 4),
+        arrowprops=dict(arrowstyle="->", color="#1f77b4", lw=2),
+    )
+    ax.annotate(
+        "",
+        xy=(7.4, 4),
+        xytext=(6.1, 4),
+        arrowprops=dict(arrowstyle="->", color="#1f77b4", lw=2),
+    )
+    ax.annotate(
+        "",
+        xy=(8.5, 3.1),
+        xytext=(8.5, 1.9),
+        arrowprops=dict(arrowstyle="->", color="#1f77b4", lw=2),
+    )
+
+    # X_start prediction schematic
+    ax = axes[1]
+    ax.set_xlim(0, 10)
+    ax.set_ylim(0, 6)
+    ax.set_aspect("equal")
+    ax.axis("off")
+    ax.set_title(
+        "Scenario B: Predict Image (x₀)",
+        fontsize=12,
+        fontweight="bold",
+        color="#ff7f0e",
+    )
+
+    boxes = [
+        (0.5, 4, "x_t\n(noisy)"),
+        (4, 4, "UNet"),
+        (7.5, 4, "x̂₀\n(predicted\nimage)"),
+    ]
+    for x, y, txt in boxes:
+        ax.add_patch(
+            plt.Rectangle(
+                (x, y - 0.8),
+                2,
+                1.6,
+                fill=True,
+                facecolor="#fff3e0",
+                edgecolor="#ff7f0e",
+                linewidth=2,
+            )
+        )
+        ax.text(x + 1, y, txt, ha="center", va="center", fontsize=8)
+
+    ax.annotate(
+        "",
+        xy=(3.9, 4),
+        xytext=(2.6, 4),
+        arrowprops=dict(arrowstyle="->", color="#ff7f0e", lw=2),
+    )
+    ax.annotate(
+        "",
+        xy=(7.4, 4),
+        xytext=(6.1, 4),
+        arrowprops=dict(arrowstyle="->", color="#ff7f0e", lw=2),
+    )
+
+    # RMS conditioning note (both)
+    for i, ax in enumerate(axes):
+        ax.text(
+            5,
+            5.5,
+            "RMS conditioning concatenated to input",
+            ha="center",
+            va="center",
+            fontsize=8,
+            style="italic",
+            color="gray",
+        )
+
+    fig.suptitle(
+        "Two Prediction Strategies for Conditional Diffusion", fontsize=14, y=1.02
+    )
+    fig.tight_layout()
+    if save_path:
+        fig.savefig(save_path, dpi=200, bbox_inches="tight")
+        print(f"Saved → {save_path}")
+    plt.show()
+    return fig
