@@ -54,7 +54,7 @@ def parse_args():
     parser.add_argument(
         "--output_dir",
         type=str,
-        default="data/flumy_dataset",
+        default="/mnt/sda_data/tharitt/diffsim/data/flumy_dataset",
         help="Output root (will contain train/ and test/ subdirs)",
     )
     parser.add_argument(
@@ -69,7 +69,7 @@ def parse_args():
     parser.add_argument(
         "--crops_per_slice",
         type=int,
-        default=4,
+        default=16,
         help="Number of random crops per 2D slice",
     )
     parser.add_argument(
@@ -270,7 +270,8 @@ def main():
         facies_out.mkdir(parents=True, exist_ok=True)
         rms_out.mkdir(parents=True, exist_ok=True)
 
-        for facies_crop, rms_crop, name in split_samples:
+        for facies_crop, rms_crop, name in 
+        :
             np.save(facies_out / f"{name}.npy", facies_crop)
             np.save(rms_out / f"{name}.npy", rms_crop)
 

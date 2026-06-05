@@ -34,13 +34,13 @@ def parse_args():
     parser.add_argument(
         "--input_dir",
         type=str,
-        default="data/flumy3d/facies",
+        default="/mnt/sda_data/tharitt/diffsim/data/flumy3d/facies",
         help="Directory with 3D facies .npy files",
     )
     parser.add_argument(
         "--output_dir",
         type=str,
-        default="data/flumy3d/rms",
+        default="/mnt/sda_data/tharitt/diffsim/data/flumy3d/rms",
         help="Output directory for RMS .npy files",
     )
     # parser.add_argument(

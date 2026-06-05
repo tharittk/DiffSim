@@ -9,7 +9,7 @@
 #     bash scripts/generate_all_cubes.sh
 #
 # Override defaults with environment variables:
-#     N_SEEDS=5 OUTPUT_DIR=data/flumy3d/facies bash scripts/generate_all_cubes.sh
+#     N_SEEDS=10 OUTPUT_DIR=data/flumy3d/facies bash scripts/generate_all_cubes.sh
 #
 set -euo pipefail
 
@@ -23,8 +23,8 @@ MESH="${MESH:-20}"
 HMAX="${HMAX:-10.0}"
 DZ="${DZ:-1.0}"
 N_SEEDS="${N_SEEDS:-5}"
-SEED_START="${SEED_START:-1}"
-OUTPUT_DIR="${OUTPUT_DIR:-data/flumy3d/facies}"
+SEED_START="${SEED_START:-6}"
+OUTPUT_DIR="${OUTPUT_DIR:-/mnt/sda_data/tharitt/diffsim/data/flumy3d/facies}"
 
 # Net-to-gross range
 NG_VALUES="${NG_VALUES:-10 20 30 40 50 60 70 80 90}"

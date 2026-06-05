@@ -3,7 +3,7 @@ Dataset class for Flumy-generated training data with RMS-only conditioning.
 
 Data format:
     Each sample is represented by two files with the same basename:
-        - facies/<name>.npy: facies map/cube with codes {0: mud, 1: bank, 2: sand}
+        - facies/<name>.npy: facies map/cube with codes {0: bank, 1: channel, 2: point_bar}
         - rms/<name>.npy: RMS attribute map/cube (continuous values)
 
 The loader supports both 2D arrays (H, W) and 3D cubes (H, W, Z).

@@ -22,9 +22,9 @@ from .mask import (
 )
 from .flumy_generator import (
     FlumyGenerator,
-    FACIES_MUD,
     FACIES_BANK,
-    FACIES_SAND,
+    FACIES_CHANNEL,
+    FACIES_POINT_BAR,
     normalize_facies,
     denormalize_facies,
 )

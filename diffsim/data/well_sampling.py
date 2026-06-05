@@ -8,7 +8,7 @@ per-facies probability maps matching the conditioning format of DiffSim.
 
 import numpy as np
 
-from .flumy_generator import FACIES_SAND, FACIES_BANK, FACIES_MUD
+from .flumy_generator import FACIES_POINT_BAR, FACIES_CHANNEL, FACIES_BANK
 
 
 def sample_well_locations(image_size, n_wells, min_spacing=None, rng=None):
@@ -106,22 +106,22 @@ def create_well_conditioning(facies_map, well_positions):
     h, w = facies_map.shape
 
     well_presence = np.zeros((h, w), dtype=np.float32)
-    sand_at_wells = np.zeros((h, w), dtype=np.float32)
+    point_bar_at_wells = np.zeros((h, w), dtype=np.float32)
+    channel_at_wells = np.zeros((h, w), dtype=np.float32)
     bank_at_wells = np.zeros((h, w), dtype=np.float32)
-    mud_at_wells = np.zeros((h, w), dtype=np.float32)
 
     for r, c in well_positions:
         well_presence[r, c] = 1.0
         fac = facies_map[r, c]
-        if fac == FACIES_SAND:
-            sand_at_wells[r, c] = 1.0
+        if fac == FACIES_POINT_BAR:
+            point_bar_at_wells[r, c] = 1.0
+        elif fac == FACIES_CHANNEL:
+            channel_at_wells[r, c] = 1.0
         elif fac == FACIES_BANK:
             bank_at_wells[r, c] = 1.0
-        elif fac == FACIES_MUD:
-            mud_at_wells[r, c] = 1.0
 
-    # Stack: [well_presence, sand, bank, mud]
+    # Stack: [well_presence, point_bar, channel, bank]
     well_cond = np.stack(
-        [well_presence, sand_at_wells, bank_at_wells, mud_at_wells], axis=0
+        [well_presence, point_bar_at_wells, channel_at_wells, bank_at_wells], axis=0
     )
     return well_cond

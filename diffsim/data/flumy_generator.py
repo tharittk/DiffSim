@@ -4,27 +4,28 @@ Flumy simulation wrapper for generating channelized reservoir facies models.
 Wraps the flumy Python package (https://flumy.minesparis.psl.eu/) to produce
 3D facies blocks and extract 2D plan-view slices for training data generation.
 
-Facies classification (3 types, matching Case 1 convention):
-    - Sand (channel fill): code 2, normalized value ~1.0
-    - Bank (levee): code 1, normalized value ~0.0
-    - Mud (overbank): code 0, normalized value ~-1.0
+Facies classification (3 types, Flumy guide Nb groups = 3):
+    - Point bar (PB + CL): code 2, normalized value ~1.0
+    - Channel (LV + CS2 + CCH + CS1 + SP): code 1, normalized value ~0.0
+    - Bank (OB + MP + HP + WL + DR + PL): code 0, normalized value ~-1.0
 """
 
 import numpy as np
 
-# Simplified 3-facies encoding
-FACIES_MUD = 0
-FACIES_BANK = 1
-FACIES_SAND = 2
+# Simplified 3-facies encoding (Flumy guide Nb groups = 3)
+FACIES_BANK = 0
+FACIES_CHANNEL = 1
+FACIES_POINT_BAR = 2
 
-FACIES_NAMES = {FACIES_MUD: "mud", FACIES_BANK: "bank", FACIES_SAND: "sand"}
+FACIES_NAMES = {FACIES_BANK: "bank", FACIES_CHANNEL: "channel", FACIES_POINT_BAR: "point_bar"}
 
-# Normalized values matching Case 1 convention [-1, 1]
+# Normalized values [-1, 1]
 FACIES_NORMALIZED = {
-    FACIES_MUD: -1.0,
-    FACIES_BANK: 0.0,
-    FACIES_SAND: 1.0,
+    FACIES_BANK: -1.0,
+    FACIES_CHANNEL: 0.0,
+    FACIES_POINT_BAR: 1.0,
 }
+
 
 
 class FlumyGenerator:
@@ -102,20 +103,25 @@ class FlumyGenerator:
         Ref: User's guide page 121: use Nb groups = 3
         Reclassify Flumy's internal facies codes into 3 categories.
 
-        See User's guide page 120-121 for information.
+        Mapping (Flumy guide Nb groups = 3):
+            - Bank (0): OB(8), MP(9), HP(10), WL(11), DR(12), PL(13), UDF(0)
+            - Channel (1): SP(3), CS1(4), CCH(5), CS2(6), LV(7)
+            - Point bar (2): CL(1), PB(2)
         """
-        # Background mud + overbank
-        facies = np.ones(facies_raw.shape, dtype=np.int8) * FACIES_MUD
+        # Default: bank (overbank + undefined)
+        facies = np.ones(facies_raw.shape, dtype=np.int8) * FACIES_BANK
 
-        # Sand: channel lag + point bar
+        # Point bar: channel lag (1) + point bar (2)
+        facies[(facies_raw == 1) | (facies_raw == 2)] = FACIES_POINT_BAR
+
+        # Channel: SP(3) + CS1(4) + CCH(5) + CS2(6) + LV(7)
         facies[
-            (facies_raw == 1)
-            | (facies_raw == 2)
-            | (facies_raw == 3)
+            (facies_raw == 3)
             | (facies_raw == 4)
-        ] = FACIES_SAND
-        # Bank: levee + crevasse splay
-        facies[(facies_raw == 5) | (facies_raw == 6) | (facies_raw == 7)] = FACIES_BANK
+            | (facies_raw == 5)
+            | (facies_raw == 6)
+            | (facies_raw == 7)
+        ] = FACIES_CHANNEL
 
         return facies
 
@@ -125,10 +131,10 @@ def normalize_facies(facies_map):
     Normalize integer facies codes to [-1, 1] range.
 
     Args:
-        facies_map: 2D array with values {0: mud, 1: bank, 2: sand}
+        facies_map: 2D array with values {0: bank, 1: channel, 2: point_bar}
 
     Returns:
-        Normalized array with values {-1.0: mud, 0.0: bank, 1.0: sand}
+        Normalized array with values {-1.0: bank, 0.0: channel, 1.0: point_bar}
     """
     normalized = np.zeros_like(facies_map, dtype=np.float32)
     for code, value in FACIES_NORMALIZED.items():

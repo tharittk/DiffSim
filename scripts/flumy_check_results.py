@@ -50,7 +50,7 @@ from diffsim.data.flumy_generator import (
 # ---------------------------------------------------------------------------
 # Facies colormap
 # ---------------------------------------------------------------------------
-FACIES_COLORS = {0: "#6C6C6CE9", 1: "#8B4513", 2: "#FFD700"}  # mud  # bank  # sand
+FACIES_COLORS = {0: "#6C6C6CE9", 1: "#8B4513", 2: "#FFD700"}  # bank  # channel  # point_bar
 FACIES_CMAP = mcolors.ListedColormap([FACIES_COLORS[i] for i in range(3)])
 FACIES_NORM = mcolors.BoundaryNorm([-0.5, 0.5, 1.5, 2.5], FACIES_CMAP.N)
 
@@ -306,11 +306,16 @@ class ResultsQC:
             cfg = json.load(f)
         cond = cfg["conditional"]
         data_cfg = cond.get("data", cfg.get("data", {}))
+        print(f"Data config from model config: {data_cfg}")
         test_path = data_cfg.get("test_image", "data/flumy_dataset/test")
+
+        print(f"Test dataset path from config: {test_path}")
 
         # Resolve relative paths against the project root
         if not os.path.isabs(test_path):
             test_path = str(_PROJECT_ROOT / test_path)
+
+        print(f"Loading test dataset from: {test_path}")
 
         self.image_size = cfg["image_size"]
         self.test_dataset = FlumyDataset(

@@ -68,7 +68,7 @@ def facies_to_ai(facies_map, ai_values=None, rock_properties=None, rng=None):
     When ``rock_properties`` is provided it takes precedence over ``ai_values``.
 
     Args:
-        facies_map: Integer array with facies codes {0: mud, 1: bank, 2: sand}
+        facies_map: Integer array with facies codes {0: bank, 1: channel, 2: point_bar}
         ai_values: Dict mapping facies code → AI value. Uses DEFAULT_AI if None.
         rock_properties: Dict mapping facies code → {"rhob": (mean, std),
                          "vp": (mean, std)}. If provided, AI is sampled

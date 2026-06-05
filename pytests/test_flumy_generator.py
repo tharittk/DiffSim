@@ -10,10 +10,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from diffsim.data.flumy_generator import (
     FACIES_BANK,
-    FACIES_MUD,
+    FACIES_CHANNEL,
     FACIES_NAMES,
     FACIES_NORMALIZED,
-    FACIES_SAND,
+    FACIES_POINT_BAR,
     FlumyGenerator,
     denormalize_facies,
     normalize_facies,
@@ -25,17 +25,17 @@ from diffsim.data.flumy_generator import (
 # ---------------------------------------------------------------------------
 class TestConstants:
     def test_facies_codes(self):
-        assert FACIES_MUD == 0
-        assert FACIES_BANK == 1
-        assert FACIES_SAND == 2
+        assert FACIES_BANK == 0
+        assert FACIES_CHANNEL == 1
+        assert FACIES_POINT_BAR == 2
 
     def test_facies_names_keys(self):
         assert set(FACIES_NAMES.keys()) == {0, 1, 2}
 
     def test_facies_normalized_values(self):
-        assert FACIES_NORMALIZED[FACIES_MUD] == -1.0
-        assert FACIES_NORMALIZED[FACIES_BANK] == 0.0
-        assert FACIES_NORMALIZED[FACIES_SAND] == 1.0
+        assert FACIES_NORMALIZED[FACIES_BANK] == -1.0
+        assert FACIES_NORMALIZED[FACIES_CHANNEL] == 0.0
+        assert FACIES_NORMALIZED[FACIES_POINT_BAR] == 1.0
 
 
 # ---------------------------------------------------------------------------
@@ -114,29 +114,29 @@ class TestFlumyGeneratorGenerate:
 # reclassify_to_three_facies
 # ---------------------------------------------------------------------------
 class TestReclassify:
-    def test_background_maps_to_mud(self):
+    def test_background_maps_to_bank(self):
         raw = np.array([0, 8, 9, 10, 100], dtype=np.int8)
         result = FlumyGenerator.reclassify_to_three_facies(raw)
-        np.testing.assert_array_equal(result, [FACIES_MUD] * 5)
+        np.testing.assert_array_equal(result, [FACIES_BANK] * 5)
 
-    def test_channel_codes_map_to_sand(self):
-        for code in [1, 2, 3, 4]:
+    def test_point_bar_codes(self):
+        for code in [1, 2]:
             raw = np.array([code], dtype=np.int8)
             result = FlumyGenerator.reclassify_to_three_facies(raw)
-            assert result[0] == FACIES_SAND, f"Code {code} should be SAND"
+            assert result[0] == FACIES_POINT_BAR, f"Code {code} should be POINT_BAR"
 
-    def test_bank_codes_map_to_bank(self):
-        for code in [5, 6, 7]:
+    def test_channel_codes(self):
+        for code in [3, 4, 5, 6, 7]:
             raw = np.array([code], dtype=np.int8)
             result = FlumyGenerator.reclassify_to_three_facies(raw)
-            assert result[0] == FACIES_BANK, f"Code {code} should be BANK"
+            assert result[0] == FACIES_CHANNEL, f"Code {code} should be CHANNEL"
 
     def test_mixed_input(self):
         raw = np.array([[0, 1, 5], [3, 7, 9]], dtype=np.int8)
         expected = np.array(
             [
-                [FACIES_MUD, FACIES_SAND, FACIES_BANK],
-                [FACIES_SAND, FACIES_BANK, FACIES_MUD],
+                [FACIES_BANK, FACIES_POINT_BAR, FACIES_CHANNEL],
+                [FACIES_CHANNEL, FACIES_CHANNEL, FACIES_BANK],
             ],
             dtype=np.int8,
         )
@@ -174,7 +174,7 @@ class TestNormalizeFacies:
         np.testing.assert_array_equal(result, np.full((3, 3), -1.0))
 
     def test_all_sand(self):
-        facies = np.full((2, 2), FACIES_SAND, dtype=np.int8)
+        facies = np.full((2, 2), FACIES_POINT_BAR, dtype=np.int8)
         result = normalize_facies(facies)
         np.testing.assert_array_equal(result, np.ones((2, 2)))
 
@@ -201,23 +201,23 @@ class TestDenormalizeFacies:
         # Values slightly off should snap to the closest facies code
         normalized = np.array([[-0.8, 0.3, 0.7]], dtype=np.float32)
         result = denormalize_facies(normalized)
-        expected = np.array([[FACIES_MUD, FACIES_BANK, FACIES_SAND]], dtype=np.int8)
+        expected = np.array([[FACIES_BANK, FACIES_CHANNEL, FACIES_POINT_BAR]], dtype=np.int8)
         np.testing.assert_array_equal(result, expected)
 
     def test_boundary_values(self):
-        # Exactly at midpoints: -0.5 is equidistant between mud(-1) and bank(0)
-        # argmin picks the first match → mud
+        # Exactly at midpoints: -0.5 is equidistant between bank(-1) and channel(0)
+        # argmin picks the first match → bank
         normalized = np.array([[-0.5, 0.5]], dtype=np.float32)
         result = denormalize_facies(normalized)
-        # -0.5 equidistant mud/bank → argmin picks first (mud=0)
-        # 0.5 equidistant bank/sand → argmin picks first (bank=1)
-        expected = np.array([[FACIES_MUD, FACIES_BANK]], dtype=np.int8)
+        # -0.5 equidistant bank/channel → argmin picks first (bank=0)
+        # 0.5 equidistant channel/point_bar → argmin picks first (channel=1)
+        expected = np.array([[FACIES_BANK, FACIES_CHANNEL]], dtype=np.int8)
         np.testing.assert_array_equal(result, expected)
 
     def test_extreme_values_clamp(self):
         normalized = np.array([[-5.0, 5.0]], dtype=np.float32)
         result = denormalize_facies(normalized)
-        expected = np.array([[FACIES_MUD, FACIES_SAND]], dtype=np.int8)
+        expected = np.array([[FACIES_BANK, FACIES_POINT_BAR]], dtype=np.int8)
         np.testing.assert_array_equal(result, expected)
 
     def test_preserves_shape(self):

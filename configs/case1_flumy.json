@@ -19,7 +19,7 @@
         "num_head_channels": 32,
         "res_blocks": 2,
         "dropout": 0.2,
-        "predict_type": "x_start",
+        "predict_type": "epsilon",
         "_predict_type_options": [
             "epsilon",
             "x_start"
@@ -40,17 +40,17 @@
             }
         },
         "data": {
-            "train_image": "data/flumy_dataset/train",
-            "test_image": "data/flumy_dataset/test"
+            "train_image": "/mnt/sda_data/tharitt/diffsim/data/flumy_dataset/train",
+            "test_image": "/mnt/sda_data/tharitt/diffsim/data/flumy_dataset/test"
         },
         "training": {
-            "epochs": 500,
+            "epochs": 300,
             "batch_size": 64,
             "lr": 5e-5,
             "loss": "mse",
             "ema_decay": 0.9999,
             "save_every": 10000,
-            "checkpoint_every": 30
+            "checkpoint_every": 50
         },
         "output": {
             "results_dir": "/mnt/sda_data/tharitt/diffsim/results/case1_flumy_conditional",
