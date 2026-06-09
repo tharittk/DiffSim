@@ -32,6 +32,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from diffsim.data.flumy_generator import FlumyGenerator
+from diffsim.data.seismic import compute_facies_mode_window
 
 
 def parse_args():
@@ -92,6 +93,12 @@ def parse_args():
         dest="augment",
         action="store_false",
         help="Disable augmentation",
+    )
+    parser.add_argument(
+        "--rms_window_half",
+        type=int,
+        default=2,
+        help="Half-window size for facies mode computation (must match RMS generation)",
     )
     return parser.parse_args()
 
@@ -211,8 +218,11 @@ def main():
 
         facies_3d = FlumyGenerator.reclassify_to_three_facies(facies_3d)
 
+        # Compute windowed facies mode (consistent with RMS averaging window)
+        facies_mode_3d = compute_facies_mode_window(facies_3d, args.rms_window_half)
+
         for z in z_indices_rand:
-            facies_slice = facies_3d[:, :, z]
+            facies_slice = facies_mode_3d[:, :, z]
             rms_slice = rms_3d[:, :, z]
 
             for crop_idx in range(args.crops_per_slice):
@@ -232,7 +242,7 @@ def main():
 
         # Tile-based cropping (no randomness, just a regular grid)
         for z in z_indices_tile:
-            facies_slice = facies_3d[:, :, z]
+            facies_slice = facies_mode_3d[:, :, z]
             rms_slice = rms_3d[:, :, z]
 
             tiles = tile_crop(facies_slice, rms_slice, crop_size=args.crop_size)
@@ -270,8 +280,7 @@ def main():
         facies_out.mkdir(parents=True, exist_ok=True)
         rms_out.mkdir(parents=True, exist_ok=True)
 
-        for facies_crop, rms_crop, name in 
-        :
+        for facies_crop, rms_crop, name in split_samples:
             np.save(facies_out / f"{name}.npy", facies_crop)
             np.save(rms_out / f"{name}.npy", rms_crop)
 

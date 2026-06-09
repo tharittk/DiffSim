@@ -16,22 +16,28 @@ import numpy as np
 from scipy.ndimage import gaussian_filter
 
 # Default acoustic impedance values (g/cc * m/s)
-# Typical values for shallow clastic sediments
+# Derived from Bongkot & Arthit fields (Gulf of Thailand) rock_physics_prod DB.
+# AI hierarchy: Bank (shale) > Channel (brine sand) > Point Bar (gas sand)
 DEFAULT_AI = {
-    0: 10000.0,  # Mud (overbank): high impedance
-    1: 8500.0,  # Bank (levee): moderate impedance
-    2: 7000.0,  # Sand (channel fill): low impedance
+    0: 8757.0,  # Bank (shale overbank): highest impedance
+    1: 8025.0,  # Channel (brine-saturated heterogeneous sand): moderate impedance
+    2: 7128.0,  # Point Bar (gas-saturated clean sand): lowest impedance
 }
 
 # Per-facies rock property distributions: {facies_code: {"rhob": (mean, std), "vp": (mean, std)}}
 # rhob in g/cc, vp in m/s.  AI = rhob * vp.
+#
+# Derived from rock_physics_prod.db (Bongkot + Arthit fields, 26 wells):
+#   - Bank (0): shale facies from well_logs (Vsh ~0.76)
+#   - Channel (1): FRM brine-saturated sand with Vsh >= 0.15 (heterogeneous channel fill)
+#   - Point Bar (2): FRM gas-saturated clean sand with Vsh < 0.15 (reservoir target)
+#
+# Statistics computed as mean-of-per-well-means and mean-of-per-well-stds,
+# replicating manual histogram reading workflow.
 DEFAULT_ROCK_PROPERTIES = {
-    # brine: AI = 6k -> 8k | vp => (3k, 4k)
-    # gas : AI = 4k -> 8k | vp => (2k, 4k)
-    # shale: AI = 6k -> 9k | vp => (3k, 4.5k)
-    0: {"rhob": (2.00, 0.05), "vp": (4600.0, 300.0)},  # Mud (overbank)
-    1: {"rhob": (2.00, 0.05), "vp": (4300.0, 300.0)},  # Bank (levee)
-    2: {"rhob": (2.00, 0.05), "vp": (3700.0, 300.0)},  # Sand (channel fill)
+    0: {"rhob": (2.52, 0.13), "vp": (3475.0, 440.0)},  # Bank (shale overbank)
+    1: {"rhob": (2.35, 0.08), "vp": (3415.0, 295.0)},  # Channel (brine sand, Vsh>=0.15)
+    2: {"rhob": (2.16, 0.12), "vp": (3300.0, 370.0)},  # Point Bar (gas sand, Vsh<0.15)
 }
 
 
@@ -322,6 +328,38 @@ def generate_rms_from_facies_3d(
             rms_cube = rms_cube + noise_level * signal_std * noise
 
     return rms_cube.astype(np.float32)
+
+
+def compute_facies_mode_window(facies_block, window_half):
+    """
+    Compute the mode (most frequent) facies within a vertical window for each z-slice.
+
+    This produces ground truth facies maps consistent with RMS attributes
+    that are computed over the same vertical window. Instead of slicing a
+    single z-level, we take the statistical mode over [z-window_half, z+window_half].
+
+    Args:
+        facies_block: 3D array (nx, ny, nz) with integer facies codes {0, 1, 2}
+        window_half: Half-window size in samples (same as rms_window_half)
+
+    Returns:
+        facies_mode_cube: 3D array (nx, ny, nz) where each z-slice is the
+                          mode of facies over the vertical window centered at z.
+    """
+    from scipy.stats import mode as scipy_mode
+
+    nx, ny, nz = facies_block.shape
+    facies_mode_cube = np.empty((nx, ny, nz), dtype=np.int8)
+
+    for z in range(nz):
+        z_start = max(0, z - window_half)
+        z_end = min(nz, z + window_half + 1)
+        window = facies_block[:, :, z_start:z_end]
+        # scipy.stats.mode along axis=2 gives per-pixel mode over the window
+        mode_result = scipy_mode(window, axis=2, keepdims=False)
+        facies_mode_cube[:, :, z] = mode_result.mode.astype(np.int8)
+
+    return facies_mode_cube
 
 
 def normalize_rms(arr, vmin=-1.0, vmax=1.0):

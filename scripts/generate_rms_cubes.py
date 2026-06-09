@@ -53,13 +53,13 @@ def parse_args():
     parser.add_argument(
         "--rms_window_half",
         type=int,
-        default=1,
+        default=2,
         help="Half-window size for RMS computation (samples)",
     )
     parser.add_argument(
         "--noise_level",
         type=float,
-        default=0.2,
+        default=0.5,
         help="Additive noise level (relative to signal std)",
     )
     # parser.add_argument(
