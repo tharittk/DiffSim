@@ -44,7 +44,7 @@
             "test_image": "/mnt/sda_data/tharitt/diffsim/data/flumy_dataset/test"
         },
         "training": {
-            "epochs": 300,
+            "epochs": 500,
             "batch_size": 64,
             "lr": 5e-5,
             "loss": "mse",
