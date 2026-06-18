@@ -197,6 +197,7 @@ def main():
     samples = []  # list of (facies_2d, rms_2d, name_stem)
 
     for facies_path, rms_path in pairs:
+        print("Processing:", facies_path.name)
         facies_3d = np.load(facies_path)
         rms_3d = np.load(rms_path)
 

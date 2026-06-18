@@ -50,7 +50,7 @@ from diffsim.data.flumy_generator import (
 # ---------------------------------------------------------------------------
 # Facies colormap
 # ---------------------------------------------------------------------------
-FACIES_COLORS = {0: "#6C6C6CE9", 1: "#8B4513", 2: "#FFD700"}  # bank  # channel  # point_bar
+FACIES_COLORS = {0: "#1D1D1DE9", 1: "#F5851DC8", 2: "#EEEB37F2"}  # bank  # channel  # point_bar
 FACIES_CMAP = mcolors.ListedColormap([FACIES_COLORS[i] for i in range(3)])
 FACIES_NORM = mcolors.BoundaryNorm([-0.5, 0.5, 1.5, 2.5], FACIES_CMAP.N)
 
