@@ -108,7 +108,7 @@ def main():
 
         t0 = time.time()
         facies_block = np.load(facies_path)
-        facies_block = FlumyGenerator.reclassify_to_three_facies(facies_block)
+        facies_block = FlumyGenerator.reclassify_facies(facies_block)
 
         rms_cube = generate_rms_from_facies_3d(
             facies_block,

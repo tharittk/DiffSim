@@ -217,7 +217,7 @@ def main():
 
         stem = facies_path.stem  # e.g. "ng50_isbx80_seed0"
 
-        facies_3d = FlumyGenerator.reclassify_to_three_facies(facies_3d)
+        facies_3d = FlumyGenerator.reclassify_facies(facies_3d)
 
         # Compute windowed facies mode (consistent with RMS averaging window)
         facies_mode_3d = compute_facies_mode_window(facies_3d, args.rms_window_half)

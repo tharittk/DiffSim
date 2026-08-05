@@ -53,3 +53,7 @@ model/
 # Tensorboard
 events.out.tfevents.*
 .git_backup/
+
+adhoc-analysis/
+
+revised_wells/

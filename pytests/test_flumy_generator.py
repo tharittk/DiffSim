@@ -9,11 +9,14 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from diffsim.data.flumy_generator import (
-    FACIES_BANK,
+    FACIES_OVERBANK,
     FACIES_CHANNEL,
+    FACIES_LEVEE,
+    FACIES_CRAVASSE,
+    FACIES_COAL,
+    FACIES_OTHERS,
     FACIES_NAMES,
     FACIES_NORMALIZED,
-    FACIES_POINT_BAR,
     FlumyGenerator,
     denormalize_facies,
     normalize_facies,
@@ -25,17 +28,23 @@ from diffsim.data.flumy_generator import (
 # ---------------------------------------------------------------------------
 class TestConstants:
     def test_facies_codes(self):
-        assert FACIES_BANK == 0
+        assert FACIES_OVERBANK == 0
         assert FACIES_CHANNEL == 1
-        assert FACIES_POINT_BAR == 2
+        assert FACIES_LEVEE == 2
+        assert FACIES_CRAVASSE == 3
+        assert FACIES_COAL == 4
+        assert FACIES_OTHERS == 5
 
     def test_facies_names_keys(self):
-        assert set(FACIES_NAMES.keys()) == {0, 1, 2}
+        assert set(FACIES_NAMES.keys()) == {0, 1, 2, 3, 4, 5}
 
     def test_facies_normalized_values(self):
-        assert FACIES_NORMALIZED[FACIES_BANK] == -1.0
-        assert FACIES_NORMALIZED[FACIES_CHANNEL] == 0.0
-        assert FACIES_NORMALIZED[FACIES_POINT_BAR] == 1.0
+        assert FACIES_NORMALIZED[FACIES_OVERBANK] == -1.0
+        assert FACIES_NORMALIZED[FACIES_CHANNEL] == -0.6
+        assert FACIES_NORMALIZED[FACIES_LEVEE] == -0.2
+        assert FACIES_NORMALIZED[FACIES_CRAVASSE] == 0.2
+        assert FACIES_NORMALIZED[FACIES_COAL] == 0.6
+        assert FACIES_NORMALIZED[FACIES_OTHERS] == 1.0
 
 
 # ---------------------------------------------------------------------------
@@ -111,47 +120,59 @@ class TestFlumyGeneratorGenerate:
 
 
 # ---------------------------------------------------------------------------
-# reclassify_to_three_facies
+# reclassify_facies
 # ---------------------------------------------------------------------------
 class TestReclassify:
-    def test_background_maps_to_bank(self):
-        raw = np.array([0, 8, 9, 10, 100], dtype=np.int8)
-        result = FlumyGenerator.reclassify_to_three_facies(raw)
-        np.testing.assert_array_equal(result, [FACIES_BANK] * 5)
-
-    def test_point_bar_codes(self):
-        for code in [1, 2]:
-            raw = np.array([code], dtype=np.int8)
-            result = FlumyGenerator.reclassify_to_three_facies(raw)
-            assert result[0] == FACIES_POINT_BAR, f"Code {code} should be POINT_BAR"
+    def test_undefined_and_overbank_map_to_overbank(self):
+        raw = np.array([0, 8, 9, 10, 11, 12, 13], dtype=np.int8)
+        result = FlumyGenerator.reclassify_facies(raw)
+        np.testing.assert_array_equal(result, [FACIES_OVERBANK] * 7)
 
     def test_channel_codes(self):
-        for code in [3, 4, 5, 6, 7]:
+        for code in [1, 2, 3]:
             raw = np.array([code], dtype=np.int8)
-            result = FlumyGenerator.reclassify_to_three_facies(raw)
+            result = FlumyGenerator.reclassify_facies(raw)
             assert result[0] == FACIES_CHANNEL, f"Code {code} should be CHANNEL"
 
+    def test_cravasse_codes(self):
+        for code in [4, 5, 6]:
+            raw = np.array([code], dtype=np.int8)
+            result = FlumyGenerator.reclassify_facies(raw)
+            assert result[0] == FACIES_CRAVASSE, f"Code {code} should be CRAVASSE"
+
+    def test_levee_code(self):
+        raw = np.array([7], dtype=np.int8)
+        result = FlumyGenerator.reclassify_facies(raw)
+        assert result[0] == FACIES_LEVEE
+
     def test_mixed_input(self):
-        raw = np.array([[0, 1, 5], [3, 7, 9]], dtype=np.int8)
+        raw = np.array([[0, 1, 4], [7, 6, 9]], dtype=np.int8)
         expected = np.array(
             [
-                [FACIES_BANK, FACIES_POINT_BAR, FACIES_CHANNEL],
-                [FACIES_CHANNEL, FACIES_CHANNEL, FACIES_BANK],
+                [FACIES_OVERBANK, FACIES_CHANNEL, FACIES_CRAVASSE],
+                [FACIES_LEVEE, FACIES_CRAVASSE, FACIES_OVERBANK],
             ],
             dtype=np.int8,
         )
-        result = FlumyGenerator.reclassify_to_three_facies(raw)
+        result = FlumyGenerator.reclassify_facies(raw)
         np.testing.assert_array_equal(result, expected)
 
     def test_output_dtype_is_int8(self):
         raw = np.zeros((4, 4), dtype=np.int32)
-        result = FlumyGenerator.reclassify_to_three_facies(raw)
+        result = FlumyGenerator.reclassify_facies(raw)
         assert result.dtype == np.int8
 
     def test_preserves_shape(self):
         raw = np.zeros((3, 5, 7), dtype=np.int8)
-        result = FlumyGenerator.reclassify_to_three_facies(raw)
+        result = FlumyGenerator.reclassify_facies(raw)
         assert result.shape == (3, 5, 7)
+
+    def test_deprecated_alias_still_works(self):
+        raw = np.array([0, 1, 7], dtype=np.int8)
+        assert np.array_equal(
+            FlumyGenerator.reclassify_to_three_facies(raw),
+            FlumyGenerator.reclassify_facies(raw),
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -159,22 +180,22 @@ class TestReclassify:
 # ---------------------------------------------------------------------------
 class TestNormalizeFacies:
     def test_maps_codes_correctly(self):
-        facies = np.array([[0, 1, 2]], dtype=np.int8)
+        facies = np.array([[0, 1, 2, 3, 4, 5]], dtype=np.int8)
         result = normalize_facies(facies)
-        expected = np.array([[-1.0, 0.0, 1.0]], dtype=np.float32)
-        np.testing.assert_array_equal(result, expected)
+        expected = np.array([[-1.0, -0.6, -0.2, 0.2, 0.6, 1.0]], dtype=np.float32)
+        np.testing.assert_allclose(result, expected)
 
     def test_output_dtype(self):
         facies = np.array([0, 1, 2], dtype=np.int8)
         assert normalize_facies(facies).dtype == np.float32
 
-    def test_all_mud(self):
+    def test_all_overbank(self):
         facies = np.zeros((3, 3), dtype=np.int8)
         result = normalize_facies(facies)
         np.testing.assert_array_equal(result, np.full((3, 3), -1.0))
 
-    def test_all_sand(self):
-        facies = np.full((2, 2), FACIES_POINT_BAR, dtype=np.int8)
+    def test_all_others(self):
+        facies = np.full((2, 2), FACIES_OTHERS, dtype=np.int8)
         result = normalize_facies(facies)
         np.testing.assert_array_equal(result, np.ones((2, 2)))
 
@@ -188,36 +209,27 @@ class TestNormalizeFacies:
 # ---------------------------------------------------------------------------
 class TestDenormalizeFacies:
     def test_exact_values_roundtrip(self):
-        facies = np.array([[0, 1, 2], [2, 0, 1]], dtype=np.int8)
+        facies = np.array([[0, 1, 2, 3, 4, 5]], dtype=np.int8)
         normalized = normalize_facies(facies)
         recovered = denormalize_facies(normalized)
         np.testing.assert_array_equal(recovered, facies)
 
     def test_output_dtype(self):
-        normalized = np.array([-1.0, 0.0, 1.0], dtype=np.float32)
+        normalized = np.array([-1.0, -0.6, -0.2, 0.2, 0.6, 1.0], dtype=np.float32)
         assert denormalize_facies(normalized).dtype == np.int8
 
     def test_noisy_values_snap_to_nearest(self):
-        # Values slightly off should snap to the closest facies code
-        normalized = np.array([[-0.8, 0.3, 0.7]], dtype=np.float32)
+        # Values clearly in each facies region (not at midpoints)
+        normalized = np.array([[-0.9, -0.55, 0.15]], dtype=np.float32)
         result = denormalize_facies(normalized)
-        expected = np.array([[FACIES_BANK, FACIES_CHANNEL, FACIES_POINT_BAR]], dtype=np.int8)
-        np.testing.assert_array_equal(result, expected)
-
-    def test_boundary_values(self):
-        # Exactly at midpoints: -0.5 is equidistant between bank(-1) and channel(0)
-        # argmin picks the first match → bank
-        normalized = np.array([[-0.5, 0.5]], dtype=np.float32)
-        result = denormalize_facies(normalized)
-        # -0.5 equidistant bank/channel → argmin picks first (bank=0)
-        # 0.5 equidistant channel/point_bar → argmin picks first (channel=1)
-        expected = np.array([[FACIES_BANK, FACIES_CHANNEL]], dtype=np.int8)
+        # -0.9 → OVERBANK(-1.0), -0.55 → CHANNEL(-0.6), 0.15 → CRAVASSE(0.2)
+        expected = np.array([[FACIES_OVERBANK, FACIES_CHANNEL, FACIES_CRAVASSE]], dtype=np.int8)
         np.testing.assert_array_equal(result, expected)
 
     def test_extreme_values_clamp(self):
         normalized = np.array([[-5.0, 5.0]], dtype=np.float32)
         result = denormalize_facies(normalized)
-        expected = np.array([[FACIES_BANK, FACIES_POINT_BAR]], dtype=np.int8)
+        expected = np.array([[FACIES_OVERBANK, FACIES_OTHERS]], dtype=np.int8)
         np.testing.assert_array_equal(result, expected)
 
     def test_preserves_shape(self):

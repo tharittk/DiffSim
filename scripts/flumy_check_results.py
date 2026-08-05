@@ -1124,7 +1124,7 @@ def plot_3d_facies_reclassification(
     from diffsim.data.flumy_generator import FlumyGenerator
 
     slice_raw = facies_3d[:, :, z_index]
-    facies_3class = FlumyGenerator.reclassify_to_three_facies(facies_3d)
+    facies_3class = FlumyGenerator.reclassify_facies(facies_3d)
     slice_3class = facies_3class[:, :, z_index]
 
     # Map raw codes
@@ -1193,7 +1193,7 @@ def plot_facies_to_rms_pipeline(
         compute_rms_cube,
     )
 
-    facies_reclass = FlumyGenerator.reclassify_to_three_facies(facies_3d)
+    facies_reclass = FlumyGenerator.reclassify_facies(facies_3d)
     facies_slice = facies_reclass[:, :, z_index]
 
     # Compute AI for the full 3D cube so we can derive reflectivity & synthetic
@@ -1295,7 +1295,7 @@ def plot_slicing_and_cropping(
     from diffsim.data.flumy_generator import FlumyGenerator
     import matplotlib.patches as mpatches
 
-    facies_reclass = FlumyGenerator.reclassify_to_three_facies(facies_3d)
+    facies_reclass = FlumyGenerator.reclassify_facies(facies_3d)
     facies_slice = facies_reclass[:, :, z_index]
     rms_z = min(z_index, rms_3d.shape[2] - 1)
     rms_slice = rms_3d[:, :, rms_z]

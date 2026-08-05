@@ -8,7 +8,14 @@ per-facies probability maps matching the conditioning format of DiffSim.
 
 import numpy as np
 
-from .flumy_generator import FACIES_POINT_BAR, FACIES_CHANNEL, FACIES_BANK
+from .flumy_generator import (
+    FACIES_OVERBANK,
+    FACIES_CHANNEL,
+    FACIES_LEVEE,
+    FACIES_CRAVASSE,
+    FACIES_COAL,
+    FACIES_OTHERS,
+)
 
 
 def sample_well_locations(image_size, n_wells, min_spacing=None, rng=None):
@@ -92,36 +99,25 @@ def create_well_conditioning(facies_map, well_positions):
 
     Produces per-facies binary indicator maps at well locations:
         Channel 0: Well presence mask (1 at wells, 0 elsewhere) = 1 - diffusion_mask
-        Channel 1: Sand indicator at wells
-        Channel 2: Bank indicator at wells
-        Channel 3: Mud indicator at wells
+        Channels 1-6: Per-facies indicators (CHANNELASSO_AV codes 0-5) at wells
 
     Args:
-        facies_map: 2D array (H, W) with facies codes {0: mud, 1: bank, 2: sand}
+        facies_map: 2D array (H, W) with facies codes {0-5}
         well_positions: Array of shape (n_wells, 2) with (row, col) positions
 
     Returns:
-        well_cond: Array of shape (4, H, W) with conditioning channels
+        well_cond: Array of shape (7, H, W) with conditioning channels
     """
     h, w = facies_map.shape
 
     well_presence = np.zeros((h, w), dtype=np.float32)
-    point_bar_at_wells = np.zeros((h, w), dtype=np.float32)
-    channel_at_wells = np.zeros((h, w), dtype=np.float32)
-    bank_at_wells = np.zeros((h, w), dtype=np.float32)
+    facies_at_wells = [np.zeros((h, w), dtype=np.float32) for _ in range(6)]
 
     for r, c in well_positions:
         well_presence[r, c] = 1.0
-        fac = facies_map[r, c]
-        if fac == FACIES_POINT_BAR:
-            point_bar_at_wells[r, c] = 1.0
-        elif fac == FACIES_CHANNEL:
-            channel_at_wells[r, c] = 1.0
-        elif fac == FACIES_BANK:
-            bank_at_wells[r, c] = 1.0
+        fac = int(facies_map[r, c])
+        if 0 <= fac <= 5:
+            facies_at_wells[fac][r, c] = 1.0
 
-    # Stack: [well_presence, point_bar, channel, bank]
-    well_cond = np.stack(
-        [well_presence, point_bar_at_wells, channel_at_wells, bank_at_wells], axis=0
-    )
+    well_cond = np.stack([well_presence] + facies_at_wells, axis=0)
     return well_cond

@@ -129,12 +129,12 @@ class TestFaciesToAiStochastic:
         assert not np.array_equal(ai1, ai2)
 
     def test_stochastic_physically_sensible(self):
-        facies = np.array([0, 1, 2] * 100, dtype=np.int8)
+        facies = np.array([0, 1, 2, 3, 4, 5] * 50, dtype=np.int8)
         rng = np.random.default_rng(0)
         ai = facies_to_ai(facies, rock_properties=DEFAULT_ROCK_PROPERTIES, rng=rng)
-        # AI = rhob * vp; with defaults roughly in 5000–12000 range
-        assert ai.min() > 4000
-        assert ai.max() < 15000
+        # AI = rhob * vp; with defaults roughly in 3000–13000 range
+        assert ai.min() > 2000
+        assert ai.max() < 16000
 
     def test_stochastic_dtype_float32(self):
         facies = np.array([0, 1, 2], dtype=np.int8)
@@ -394,7 +394,7 @@ class TestGenerateRmsFromFacies3d:
         assert np.std(rms_smooth) < np.std(rms_raw)
 
     def test_invalid_facies_codes_raises(self):
-        bad_facies = np.array([[[0, 1, 5]]], dtype=np.int8)
+        bad_facies = np.array([[[0, 1, 6]]], dtype=np.int8)  # code 6 is invalid
         with pytest.raises(ValueError, match="unexpected codes"):
             generate_rms_from_facies_3d(bad_facies)
 

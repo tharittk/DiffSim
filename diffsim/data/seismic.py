@@ -16,28 +16,29 @@ import numpy as np
 from scipy.ndimage import gaussian_filter
 
 # Default acoustic impedance values (g/cc * m/s)
-# Derived from Bongkot & Arthit fields (Gulf of Thailand) rock_physics_prod DB.
-# AI hierarchy: Bank (shale) > Channel (brine sand) > Point Bar (gas sand)
-DEFAULT_AI = {
-    0: 8757.0,  # Bank (shale overbank): highest impedance
-    1: 8025.0,  # Channel (brine-saturated heterogeneous sand): moderate impedance
-    2: 7128.0,  # Point Bar (gas-saturated clean sand): lowest impedance
-}
+# Based on CHANNELASSO_AV facies scheme, Bongkot & Arthit fields (Gulf of Thailand).
+# Derived from revised_wells data; see notebooks/rock_property_analysis_v2.ipynb.
+# DEFAULT_AI = {
+#     0: 10151.0,  # Overbank (shale): high impedance
+#     1:  9037.0,  # Channel (sand): lower impedance
+#     2: 10619.0,  # Levee (silt): highest impedance
+#     3:  7937.0,  # Cravasse (sand): low impedance
+#     4:  6567.0,  # Coal: lowest impedance
+#     5: 10566.0,  # Others (shale-like): high impedance
+# }
 
 # Per-facies rock property distributions: {facies_code: {"rhob": (mean, std), "vp": (mean, std)}}
 # rhob in g/cc, vp in m/s.  AI = rhob * vp.
 #
-# Derived from rock_physics_prod.db (Bongkot + Arthit fields, 26 wells):
-#   - Bank (0): shale facies from well_logs (Vsh ~0.76)
-#   - Channel (1): FRM brine-saturated sand with Vsh >= 0.15 (heterogeneous channel fill)
-#   - Point Bar (2): FRM gas-saturated clean sand with Vsh < 0.15 (reservoir target)
-#
-# Statistics computed as mean-of-per-well-means and mean-of-per-well-stds,
-# replicating manual histogram reading workflow.
+# CHANNELASSO_AV scheme (6 classes); Bongkot + Arthit fields, revised_wells data.
+# Statistics: mean-of-per-well-means; see notebooks/rock_property_analysis_v2.ipynb.
 DEFAULT_ROCK_PROPERTIES = {
-    0: {"rhob": (2.52, 0.13), "vp": (3475.0, 440.0)},  # Bank (shale overbank)
-    1: {"rhob": (2.35, 0.08), "vp": (3415.0, 295.0)},  # Channel (brine sand, Vsh>=0.15)
-    2: {"rhob": (2.16, 0.12), "vp": (3300.0, 370.0)},  # Point Bar (gas sand, Vsh<0.15)
+    0: {"rhob": (2.604, 0.072), "vp": (3898.7, 532.7)},  # Overbank (shale)
+    1: {"rhob": (2.381, 0.162), "vp": (3795.5, 596.6)},  # Channel (sand)
+    2: {"rhob": (2.577, 0.100), "vp": (4122.4, 512.6)},  # Levee (silt)
+    3: {"rhob": (2.377, 0.116), "vp": (3339.3, 310.7)},  # Cravasse (sand)
+    4: {"rhob": (2.240, 0.197), "vp": (2931.5, 311.6)},  # Coal
+    5: {"rhob": (2.511, 0.112), "vp": (4207.7, 391.0)},  # Others (shale-like)
 }
 
 
@@ -75,7 +76,7 @@ def facies_to_ai(facies_map, ai_values=None, rock_properties=None, rng=None):
 
     Args:
         facies_map: Integer array with facies codes {0: bank, 1: channel, 2: point_bar}
-        ai_values: Dict mapping facies code → AI value. Uses DEFAULT_AI if None.
+        ai_values: Dict mapping facies code → AI value. Uses DEFAULT_ROCK_PROPERTIES if None.
         rock_properties: Dict mapping facies code → {"rhob": (mean, std),
                          "vp": (mean, std)}. If provided, AI is sampled
                          stochastically per voxel.
@@ -101,9 +102,6 @@ def facies_to_ai(facies_map, ai_values=None, rock_properties=None, rng=None):
             ai_map[mask] = (rhob * vp).astype(np.float32)
         return ai_map
 
-    # Deterministic fallback
-    if ai_values is None:
-        ai_values = DEFAULT_AI
     ai_map = np.zeros_like(facies_map, dtype=np.float32)
     for code, ai in ai_values.items():
         ai_map[facies_map == code] = ai
@@ -267,7 +265,7 @@ def generate_rms_from_facies_3d(
         rms_cube: 3D array (nx, ny, nz-1), unnormalized
     """
     # check if the facies block contains valid codes
-    valid_codes = set(DEFAULT_AI.keys())
+    valid_codes = set(DEFAULT_ROCK_PROPERTIES.keys())
     unique_codes = set(np.unique(facies_block).tolist())
     if not unique_codes.issubset(valid_codes):
         raise ValueError(

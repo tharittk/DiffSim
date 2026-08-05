@@ -108,9 +108,10 @@ class FlumyDataset(data.Dataset):
         facies_int = facies_int.astype(np.int8, copy=False)
         rms = rms.astype(np.float32, copy=False)
 
-        # Validate facies codes
+        # Validate facies codes (CHANNELASSO_AV: 0=Overbank, 1=Channel, 2=Levee,
+        #                         3=Cravasse, 4=Coal, 5=Others)
         unique_codes = set(np.unique(facies_int))
-        valid_codes = {0, 1, 2}
+        valid_codes = {0, 1, 2, 3, 4, 5}
         if not unique_codes.issubset(valid_codes):
             raise ValueError(
                 f"File {facies_path} has unexpected facies codes: "
