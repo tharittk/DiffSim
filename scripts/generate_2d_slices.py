@@ -51,7 +51,6 @@ def parse_args():
         default="/mnt/sda_data/tharitt/diffsim/data/flumy3d/rms",
         help="Directory with 3D RMS .npy cubes",
     )
-    # output local for fast(er) training
     parser.add_argument(
         "--output_dir",
         type=str,
@@ -100,6 +99,20 @@ def parse_args():
         default=2,
         help="Half-window size for facies mode computation (must match RMS generation)",
     )
+    parser.add_argument(
+        "--resample_frames",
+        type=int,
+        nargs="+",
+        default=[256, 128],
+        metavar="SIZE",
+        help="Frame sizes (H=W) to extract then downsample to crop_size (e.g. 256 128)",
+    )
+    parser.add_argument(
+        "--resamples_per_slice",
+        type=int,
+        default=4,
+        help="Random resample windows to draw per slice per frame size",
+    )
     return parser.parse_args()
 
 
@@ -120,14 +133,16 @@ def random_crop(facies_2d, rms_2d, crop_size, rng):
 
 
 def tile_crop(facies_2d, rms_2d, crop_size=64):
-    """Split a 256x256 slice into non-overlapping tiles on a regular grid.
+    """Split a slice into non-overlapping tiles on a regular grid.
 
-    Assumes input is exactly 256x256. With crop_size=64 this yields a 4x4
-    grid of 16 tiles. Returns a list of (facies, rms) pairs.
+    Input dimensions must be exactly divisible by crop_size.
+    Returns a list of (facies, rms) pairs.
     """
     h, w = facies_2d.shape
-    if h != 256 or w != 256:
-        raise ValueError(f"Expected 256x256 input, got ({h},{w})")
+    if h % crop_size != 0 or w % crop_size != 0:
+        raise ValueError(
+            f"Input ({h},{w}) not divisible by crop_size ({crop_size})"
+        )
     n_rows = h // crop_size
     n_cols = w // crop_size
     tiles = []
@@ -142,6 +157,43 @@ def tile_crop(facies_2d, rms_2d, crop_size=64):
                 )
             )
     return tiles
+
+
+def resample_pair(facies_2d, rms_2d, frame_h, frame_w, target_size, rng):
+    """Crop a frame_h×frame_w window from the slice and resample to target_size×target_size.
+
+    If frame_h/frame_w equals the slice dimensions, the whole slice is used.
+    Facies resampled with nearest-neighbour; RMS with bilinear interpolation.
+    """
+    from PIL import Image
+
+    h, w = facies_2d.shape
+    if frame_h > h or frame_w > w:
+        raise ValueError(
+            f"frame ({frame_h},{frame_w}) exceeds slice ({h},{w})"
+        )
+
+    # Random top-left corner; if frame matches slice, no crop needed
+    y = int(rng.integers(0, h - frame_h + 1)) if frame_h < h else 0
+    x = int(rng.integers(0, w - frame_w + 1)) if frame_w < w else 0
+
+    fac_window = facies_2d[y : y + frame_h, x : x + frame_w]
+    rms_window = rms_2d[y : y + frame_h, x : x + frame_w]
+
+    # Resample
+    fac_out = np.array(
+        Image.fromarray(fac_window.astype(np.uint8)).resize(
+            (target_size, target_size), Image.NEAREST
+        ),
+        dtype=np.int8,
+    )
+    rms_out = np.array(
+        Image.fromarray(rms_window.astype(np.float32), mode="F").resize(
+            (target_size, target_size), Image.BILINEAR
+        ),
+        dtype=np.float32,
+    )
+    return fac_out, rms_out
 
 
 def augment_pair(facies_crop, rms_crop, rng):
@@ -191,6 +243,7 @@ def main():
         f"  slices_per_cube={args.slices_per_cube}, crops_per_slice={args.crops_per_slice}"
     )
     print(f"  crop_size={args.crop_size}, augment={args.augment}")
+    print(f"  resample_frames={args.resample_frames}, resamples_per_slice={args.resamples_per_slice}")
     print()
 
     # Generate all 2D samples
@@ -259,10 +312,40 @@ def main():
                 name = f"{stem}_z{z:03d}_t{crop_idx}_tile"
                 samples.append((facies_crop, rms_crop, name))
 
+        # Resample: extract arbitrary-sized frame and downsample to crop_size
+        z_indices_resamp = rng.choice(
+            nz, size=min(args.slices_per_cube, nz), replace=False
+        )
+        for z in z_indices_resamp:
+            facies_slice = facies_mode_3d[:, :, z]
+            rms_slice = rms_3d[:, :, z]
+            h_sl, w_sl = facies_slice.shape
+
+            for frame_size in args.resample_frames:
+                if frame_size > h_sl or frame_size > w_sl:
+                    continue  # frame larger than slice; skip silently
+
+                for r_idx in range(args.resamples_per_slice):
+                    facies_crop, rms_crop = resample_pair(
+                        facies_slice, rms_slice,
+                        frame_size, frame_size,
+                        args.crop_size, rng,
+                    )
+
+                    if args.augment:
+                        facies_crop, rms_crop = augment_pair(facies_crop, rms_crop, rng)
+
+                    name = f"{stem}_z{z:03d}_f{frame_size}_r{r_idx}_resamp"
+                    samples.append((facies_crop, rms_crop, name))
+
+    slice_h, slice_w = facies_mode_3d.shape[:2]  # representative slice shape
+    n_tiles = (slice_h // args.crop_size) * (slice_w // args.crop_size)
+    valid_frames = [f for f in args.resample_frames if f <= slice_h and f <= slice_w]
     print(
-        f"generated {len(z_indices_rand) * args.crops_per_slice} random crops per cube"
+        f"  per cube: {len(z_indices_rand) * args.crops_per_slice} random crops, "
+        f"{len(z_indices_tile) * n_tiles} tiles, "
+        f"{len(z_indices_resamp) * len(valid_frames) * args.resamples_per_slice} resampled"
     )
-    print(f"generated {len(z_indices_tile) * len(tiles)} tile crops per cube")
 
     print(f"Generated {len(samples)} total 2D samples")
 
