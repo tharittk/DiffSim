@@ -65,7 +65,7 @@ def multi_inference_probabilities(
     n_samples=10,
     ddim_steps=50,
     eta=0.0,
-    facies_codes=(0, 1, 2),
+    facies_codes=(0, 1, 2, 3, 4, 5),
 ):
     """
     Run multiple diffusion inferences and compute per-facies probability maps.
@@ -150,10 +150,13 @@ def inference_full_resolution(
         eta=eta,
     )
 
-    # Compute most likely facies (argmax over probability maps)
+    # Compute most likely facies: map argmax index back to actual facies code
+    sorted_codes = sorted(probabilities.keys())
     prob_stack = np.stack(
-        [probabilities[code] for code in sorted(probabilities.keys())], axis=-1
+        [probabilities[code] for code in sorted_codes], axis=-1
     )
-    most_likely = np.argmax(prob_stack, axis=-1).astype(np.int8)
+    most_likely = np.array(sorted_codes, dtype=np.int8)[
+        np.argmax(prob_stack, axis=-1)
+    ]
 
     return probabilities, samples, most_likely
