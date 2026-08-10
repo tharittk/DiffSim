@@ -14,6 +14,7 @@ Supports both 2D and 3D cases based on config["type"].
 
 import json
 import os
+import re
 import socket
 from datetime import datetime
 from pathlib import Path
@@ -30,7 +31,7 @@ def find_free_port():
         return str(s.getsockname()[1])
 
 
-from torch.utils.data import DataLoader  # noqa: E402
+from torch.utils.data import DataLoader, WeightedRandomSampler  # noqa: E402
 from torch.optim import Adam, lr_scheduler
 from torchvision.utils import save_image
 from tensorboardX import SummaryWriter
@@ -53,6 +54,40 @@ def set_seed(seed):
     np.random.seed(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
+
+
+def build_group_balanced_sampler(dataset, group_power=1.0):
+    """Build a WeightedRandomSampler using (ng, isbx) parsed from filenames.
+
+    Weight for sample i in group g is proportional to 1 / count(g)^group_power.
+    This equalizes sampling across scenarios without scanning array contents.
+    """
+    pat = re.compile(r"ng(?P<ng>\d+)_isbx(?P<isbx>\d+)_")
+    group_keys = []
+    for facies_path, _ in dataset.file_pairs:
+        m = pat.search(facies_path.name)
+        if m:
+            group_keys.append((int(m.group("ng")), int(m.group("isbx"))))
+        else:
+            group_keys.append((None, None))
+
+    # Count samples per group
+    group_counts = {}
+    for key in group_keys:
+        group_counts[key] = group_counts.get(key, 0) + 1
+
+    # Inverse-frequency weighting (optionally tempered)
+    weights = np.array(
+        [1.0 / (group_counts[key] ** float(group_power)) for key in group_keys],
+        dtype=np.float64,
+    )
+
+    sampler = WeightedRandomSampler(
+        weights=torch.from_numpy(weights),
+        num_samples=len(weights),
+        replacement=True,
+    )
+    return sampler, group_counts
 
 
 def main_worker(config_path, timestamp):
@@ -147,13 +182,34 @@ def main_worker(config_path, timestamp):
         image_size=(image_size, image_size),
     )
 
-    dataloader = DataLoader(
-        dataset,
-        batch_size=train_cfg["batch_size"],
-        shuffle=True,
-        num_workers=4,
-        pin_memory=True,
-    )
+    # Optional: balance scenario sampling by (ng, isbx) from filename metadata.
+    # This helps prevent degenerate predictions on low/high-end combinations.
+    balance_by_ng_isbx = train_cfg.get("balance_by_ng_isbx", True)
+    group_power = train_cfg.get("balance_group_power", 1.0)
+    if balance_by_ng_isbx:
+        sampler, group_counts = build_group_balanced_sampler(
+            dataset, group_power=group_power
+        )
+        dataloader = DataLoader(
+            dataset,
+            batch_size=train_cfg["batch_size"],
+            sampler=sampler,
+            shuffle=False,
+            num_workers=4,
+            pin_memory=True,
+        )
+        print(
+            f"Using weighted sampler by (ng,isbx): {len(group_counts)} groups, "
+            f"power={group_power}"
+        )
+    else:
+        dataloader = DataLoader(
+            dataset,
+            batch_size=train_cfg["batch_size"],
+            shuffle=True,
+            num_workers=4,
+            pin_memory=True,
+        )
 
     print(f"Data path: {data_path}")
     print(f"Dataset class: {dataset.__class__.__name__}")
