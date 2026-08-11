@@ -42,9 +42,9 @@ if str(_PROJECT_ROOT) not in sys.path:
 from diffsim.core.network import Network
 from diffsim.data.flumy_dataset import FlumyDataset
 from diffsim.data.flumy_generator import (
-    denormalize_facies,
-    FACIES_NAMES,
-    FACIES_NORMALIZED,
+    denormalize_lithofacies,
+    normalize_lithofacies,
+    LITHO_NAMES,
 )
 
 # ---------------------------------------------------------------------------
@@ -206,7 +206,7 @@ def run_inference(
 
     # output shape: (1, 1, H, W) -> (H, W)
     output_np = output.squeeze().cpu().numpy()
-    facies_int = denormalize_facies(output_np)
+    facies_int = denormalize_lithofacies(output_np)
     return facies_int
 
 
@@ -228,7 +228,7 @@ def plot_facies(
     ax.set_yticks([])
     if show_colorbar:
         cbar = plt.colorbar(im, ax=ax, ticks=[0, 1, 2], fraction=0.046, pad=0.04)
-        cbar.ax.set_yticklabels(["Mud", "Bank", "Sand"], fontsize=8)
+        cbar.ax.set_yticklabels(["Shale", "Sand", "Silt"], fontsize=8)
     return im
 
 
@@ -488,7 +488,7 @@ class ResultsQC:
 
         for i in range(n):
             sample = self.get_test_sample(index + i)
-            gt = denormalize_facies(sample["gt_image"].squeeze().numpy())
+            gt = denormalize_lithofacies(sample["gt_image"].squeeze().numpy())
             rms = sample["cond_image"].squeeze().numpy()
 
             plot_facies(
@@ -532,7 +532,7 @@ class ResultsQC:
         """
         sample = self.get_test_sample(index)
         cond_image = sample["cond_image"].unsqueeze(0)  # (1, 1, H, W)
-        gt = denormalize_facies(sample["gt_image"].squeeze().numpy())
+        gt = denormalize_lithofacies(sample["gt_image"].squeeze().numpy())
 
         pred_eps = self.infer(
             "epsilon", cond_image, use_ddim=use_ddim, ddim_steps=ddim_steps, seed=seed
@@ -570,7 +570,7 @@ class ResultsQC:
         """
         sample = self.get_test_sample(index)
         cond_image = sample["cond_image"].unsqueeze(0)
-        gt = denormalize_facies(sample["gt_image"].squeeze().numpy())
+        gt = denormalize_lithofacies(sample["gt_image"].squeeze().numpy())
         rms = sample["cond_image"].squeeze().numpy()
 
         pred_eps = self.infer(
@@ -642,7 +642,7 @@ class ResultsQC:
         for row, idx in enumerate(indices):
             sample = self.get_test_sample(idx)
             cond_image = sample["cond_image"].unsqueeze(0)
-            gt = denormalize_facies(sample["gt_image"].squeeze().numpy())
+            gt = denormalize_lithofacies(sample["gt_image"].squeeze().numpy())
             rms = sample["cond_image"].squeeze().numpy()
 
             pred_eps = self.infer(
@@ -742,7 +742,7 @@ class ResultsQC:
         """
         sample = self.get_test_sample(index)
         cond_image = sample["cond_image"].unsqueeze(0)
-        gt = denormalize_facies(sample["gt_image"].squeeze().numpy())
+        gt = denormalize_lithofacies(sample["gt_image"].squeeze().numpy())
         pred_eps = self.infer(
             "epsilon", cond_image, use_ddim=use_ddim, ddim_steps=ddim_steps, seed=seed
         )
@@ -752,13 +752,13 @@ class ResultsQC:
 
         def proportions(arr):
             total = arr.size
-            return {FACIES_NAMES[c]: np.sum(arr == c) / total * 100 for c in range(3)}
+            return {LITHO_NAMES[c]: np.sum(arr == c) / total * 100 for c in range(3)}
 
         gt_p = proportions(gt)
         eps_p = proportions(pred_eps)
         x0_p = proportions(pred_x0)
 
-        labels = list(FACIES_NAMES.values())
+        labels = [LITHO_NAMES[c] for c in range(3)]
         x_pos = np.arange(len(labels))
         width = 0.25
 
@@ -1154,7 +1154,7 @@ def plot_3d_facies_reclassification(
     axes[1].set_xlabel("X")
     axes[1].set_ylabel("Y")
     cbar1 = plt.colorbar(im1, ax=axes[1], ticks=[0, 1, 2], fraction=0.046, pad=0.04)
-    cbar1.ax.set_yticklabels(["Mud", "Bank", "Sand"], fontsize=9)
+    cbar1.ax.set_yticklabels(["Shale", "Sand", "Silt"], fontsize=9)
 
     fig.suptitle(f"Facies Reclassification (z={z_index})", fontsize=14, y=1.02)
     fig.tight_layout()
@@ -1231,7 +1231,7 @@ def plot_facies_to_rms_pipeline(
     axes[0].set_title("① Facies (3-class)", fontsize=10)
     plt.colorbar(
         im0, ax=axes[0], ticks=[0, 1, 2], fraction=0.046, pad=0.04
-    ).ax.set_yticklabels(["Mud", "Bank", "Sand"], fontsize=7)
+    ).ax.set_yticklabels(["Shale", "Sand", "Silt"], fontsize=7)
 
     # AI
     im1 = axes[1].imshow(ai_slice, cmap="gray_r", origin="upper")
@@ -1408,7 +1408,7 @@ def plot_diffusion_training_schematic(
         figsize: Figure size.
         save_path: Optional save path.
     """
-    from diffsim.data.flumy_generator import normalize_facies
+    from diffsim.data.flumy_generator import normalize_lithofacies
     from diffsim.data.seismic import normalize_rms
 
     # Load a sample if not provided
@@ -1419,7 +1419,7 @@ def plot_diffusion_training_schematic(
         facies_patch = np.load(facies_files[0])
         rms_patch = np.load(rms_files[0])
 
-    facies_norm = normalize_facies(facies_patch).astype(np.float32)
+    facies_norm = normalize_lithofacies(facies_patch).astype(np.float32)
     rms_norm = normalize_rms(rms_patch, vmin=-1.0, vmax=1.0)
 
     # Simulate forward diffusion (add noise at various levels)

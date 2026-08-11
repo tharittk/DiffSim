@@ -10,7 +10,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-from diffsim.data.flumy_generator import denormalize_facies, FACIES_NORMALIZED
+from diffsim.data.flumy_generator import denormalize_lithofacies
 from diffsim.data.seismic import normalize_rms
 
 
@@ -65,7 +65,7 @@ def multi_inference_probabilities(
     n_samples=10,
     ddim_steps=50,
     eta=0.0,
-    facies_codes=(0, 1, 2, 3, 4, 5),
+    facies_codes=(0, 1, 2),
 ):
     """
     Run multiple diffusion inferences and compute per-facies probability maps.
@@ -93,7 +93,7 @@ def multi_inference_probabilities(
         output = run_inference(network, cond_image, ddim_steps=ddim_steps, eta=eta)
         # Convert normalized output to integer facies codes
         output_np = output.squeeze().cpu().numpy()
-        facies_int = denormalize_facies(output_np)
+        facies_int = denormalize_lithofacies(output_np)
         samples[i] = facies_int
 
     # Compute per-facies probability (frequency of each code across samples)

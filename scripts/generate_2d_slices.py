@@ -31,8 +31,13 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from diffsim.data.flumy_generator import FlumyGenerator
+from diffsim.data.flumy_generator import FlumyGenerator, map_channelasso_to_litho
 from diffsim.data.seismic import compute_facies_mode_window
+from diffsim.data.style_match import (
+    build_reference_cdf,
+    histogram_match_rms,
+    load_seismic_rms_grid,
+)
 
 
 def parse_args():
@@ -112,6 +117,20 @@ def parse_args():
         type=int,
         default=4,
         help="Random resample windows to draw per slice per frame size",
+    )
+    parser.add_argument(
+        "--seismic_ref",
+        type=str,
+        default=None,
+        metavar="PATH",
+        help="Path to real seismic RMS reference file (e.g. h05_sub1). "
+             "When supplied, style matching is applied to every RMS crop.",
+    )
+    parser.add_argument(
+        "--no_style_match",
+        action="store_true",
+        default=False,
+        help="Disable style matching even when --seismic_ref is provided (for debugging).",
     )
     return parser.parse_args()
 
@@ -216,6 +235,20 @@ def main():
     output_dir = Path(args.output_dir)
     rng = np.random.default_rng(args.seed)
 
+    # Load real seismic reference for style matching
+    ref_sorted_vals = None
+    if args.seismic_ref and not args.no_style_match:
+        ref_path = Path(args.seismic_ref)
+        if not ref_path.is_file():
+            print(f"Error: seismic_ref not found: {ref_path}", file=sys.stderr)
+            sys.exit(1)
+        print(f"Loading seismic reference: {ref_path}")
+        ref_grid = load_seismic_rms_grid(ref_path)
+        ref_sorted_vals = build_reference_cdf(ref_grid)
+        print(f"  reference grid shape: {ref_grid.shape}, "
+              f"value range: {ref_sorted_vals[0]:.2f}–{ref_sorted_vals[-1]:.2f}")
+        del ref_grid  # free memory; only CDF is needed
+
     # Validate inputs
     if not facies_dir.is_dir():
         print(f"Error: {facies_dir} not found.", file=sys.stderr)
@@ -274,6 +307,8 @@ def main():
 
         # Compute windowed facies mode (consistent with RMS averaging window)
         facies_mode_3d = compute_facies_mode_window(facies_3d, args.rms_window_half)
+        # Final training target is LITHO_FLUMY_AV (0=shale,1=sand,2=silt)
+        facies_mode_3d = map_channelasso_to_litho(facies_mode_3d)
 
         for z in z_indices_rand:
             facies_slice = facies_mode_3d[:, :, z]
@@ -365,9 +400,13 @@ def main():
         rms_out.mkdir(parents=True, exist_ok=True)
 
         for facies_crop, rms_crop, name in split_samples:
+            if ref_sorted_vals is not None:
+                rms_crop = histogram_match_rms(rms_crop, ref_sorted_vals)
             np.save(facies_out / f"{name}.npy", facies_crop)
             np.save(rms_out / f"{name}.npy", rms_crop)
 
+    if ref_sorted_vals is not None:
+        print("  style matching applied (histogram transfer from seismic reference)")
     print(f"\nSaved to {output_dir}/{{train,test}}/{{facies,rms}}/")
     print("Done.")
 

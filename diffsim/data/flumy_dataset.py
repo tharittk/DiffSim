@@ -20,7 +20,7 @@ import numpy as np
 import torch
 import torch.utils.data as data
 
-from diffsim.data.flumy_generator import normalize_facies
+from diffsim.data.flumy_generator import normalize_lithofacies
 from diffsim.data.seismic import normalize_rms
 
 
@@ -108,10 +108,9 @@ class FlumyDataset(data.Dataset):
         facies_int = facies_int.astype(np.int8, copy=False)
         rms = rms.astype(np.float32, copy=False)
 
-        # Validate facies codes (CHANNELASSO_AV: 0=Overbank, 1=Channel, 2=Levee,
-        #                         3=Cravasse, 4=Coal, 5=Others)
+        # Validate facies codes for LITHO_FLUMY_AV: 0=Shale, 1=Sand, 2=Silt
         unique_codes = set(np.unique(facies_int))
-        valid_codes = {0, 1, 2, 3, 4, 5}
+        valid_codes = {0, 1, 2}
         if not unique_codes.issubset(valid_codes):
             raise ValueError(
                 f"File {facies_path} has unexpected facies codes: "
@@ -124,7 +123,7 @@ class FlumyDataset(data.Dataset):
             rms = self._resize_continuous(rms, self.image_size)
 
         # Normalize channels to the range expected by diffusion training.
-        facies_norm = normalize_facies(facies_int)
+        facies_norm = normalize_lithofacies(facies_int)
         rms_norm = normalize_rms(rms, vmin=-1.0, vmax=1.0)
 
         # RMS-only conditioning with full-generation mask.

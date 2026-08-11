@@ -42,6 +42,23 @@ FACIES_NORMALIZED = {
     FACIES_OTHERS:   1.0,
 }
 
+# LITHO_FLUMY_AV encoding (3 classes)
+LITHO_SHALE = 0
+LITHO_SAND = 1
+LITHO_SILT = 2
+
+LITHO_NAMES = {
+    LITHO_SHALE: "shale",
+    LITHO_SAND: "sand",
+    LITHO_SILT: "silt",
+}
+
+LITHO_NORMALIZED = {
+    LITHO_SHALE: -1.0,
+    LITHO_SAND: 0.0,
+    LITHO_SILT: 1.0,
+}
+
 
 
 class FlumyGenerator:
@@ -164,6 +181,39 @@ def normalize_facies(facies_map):
     for code, value in FACIES_NORMALIZED.items():
         normalized[facies_map == code] = value
     return normalized
+
+
+def map_channelasso_to_litho(facies_channelasso):
+    """Map CHANNELASSO_AV (0-5) to LITHO_FLUMY_AV (0-2).
+
+    Mapping:
+        - Channel (1), Cravasse (3) -> Sand (1)
+        - Levee (2) -> Silt (2)
+        - Overbank (0), Coal (4), Others (5) -> Shale (0)
+    """
+    litho = np.full(facies_channelasso.shape, LITHO_SHALE, dtype=np.int8)
+    litho[(facies_channelasso == FACIES_CHANNEL) | (facies_channelasso == FACIES_CRAVASSE)] = LITHO_SAND
+    litho[facies_channelasso == FACIES_LEVEE] = LITHO_SILT
+    return litho
+
+
+def normalize_lithofacies(litho_map):
+    """Normalize 3-class lithofacies to [-1, 1] expected by diffusion training."""
+    normalized = np.zeros_like(litho_map, dtype=np.float32)
+    for code, value in LITHO_NORMALIZED.items():
+        normalized[litho_map == code] = value
+    return normalized
+
+
+def denormalize_lithofacies(normalized_map):
+    """Convert normalized values back to 3-class lithofacies integer codes."""
+    values = np.array(list(LITHO_NORMALIZED.values()))
+    codes = np.array(list(LITHO_NORMALIZED.keys()))
+    distances = np.abs(
+        normalized_map[..., np.newaxis] - values[np.newaxis, np.newaxis, :]
+    )
+    closest = np.argmin(distances, axis=-1)
+    return codes[closest].astype(np.int8)
 
 
 def denormalize_facies(normalized_map):
