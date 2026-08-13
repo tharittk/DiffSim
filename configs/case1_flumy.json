@@ -40,8 +40,8 @@
             }
         },
         "data": {
-            "train_image": "/mnt/sda_data/tharitt/diffsim/data/flumy_dataset/train",
-            "test_image": "/mnt/sda_data/tharitt/diffsim/data/flumy_dataset/test"
+            "train_image": "/mnt/sda_data/tharitt/diffsim/data/slice_data_2d/train",
+            "test_image": "/mnt/sda_data/tharitt/diffsim/data/slice_data_2d/test"
         },
         "training": {
             "epochs": 250,
@@ -50,7 +50,22 @@
             "loss": "mse",
             "ema_decay": 0.9999,
             "save_every": 10000,
-            "checkpoint_every": 50
+            "checkpoint_every": 50,
+            "balance_by_ng_isbx": true,
+            "balance_group_power": 1.0,
+            "deterministic": false,
+            "enable_tf32": true,
+            "cudnn_benchmark": true,
+            "amp": true,
+            "amp_dtype": "bfloat16",
+            "num_workers": 8,
+            "persistent_workers": true,
+            "prefetch_factor": 4,
+            "sample_scale_weights": {
+                "local": 1.0,
+                "frame_128": 1.25,
+                "frame_256": 2.0
+            }
         },
         "output": {
             "results_dir": "/mnt/sda_data/tharitt/diffsim/results/case1_flumy_conditional",

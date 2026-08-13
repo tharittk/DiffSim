@@ -59,7 +59,7 @@ def parse_args():
     parser.add_argument(
         "--output_dir",
         type=str,
-        default="/mnt/sda_data/tharitt/diffsim/data/flumy_dataset",
+        default="/mnt/sda_data/tharitt/diffsim/data/slice_data_2d",
         help="Output root (will contain train/ and test/ subdirs)",
     )
     parser.add_argument(
