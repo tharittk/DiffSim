@@ -114,10 +114,18 @@ class Network(BaseNetwork):
         self.beta_schedule = beta_schedule
         self.predict_type = predict_type  # 'epsilon' or 'x_start'
         self.loss_fn = None
+        self.loss_kind = 'mse'
 
     def set_loss(self, loss_fn):
         """Set the loss function for training."""
         self.loss_fn = loss_fn
+        self.loss_kind = 'l1' if isinstance(loss_fn, torch.nn.L1Loss) else 'mse'
+
+    def _weighted_loss(self, target, pred, pixel_weight):
+        """Per-pixel weighted loss, e.g. for class-balanced facies training."""
+        error = (pred - target).abs() if self.loss_kind == 'l1' else (pred - target) ** 2
+        weight = pixel_weight.expand_as(error)
+        return (error * weight).sum() / weight.sum().clamp_min(1e-8)
 
     def set_new_noise_schedule(self, device=torch.device('cuda'), phase='train'):
         """
@@ -335,7 +343,7 @@ class Network(BaseNetwork):
 
         return y_t, ret_arr
 
-    def forward(self, y_0, y_cond=None, mask=None, noise=None):
+    def forward(self, y_0, y_cond=None, mask=None, noise=None, pixel_weight=None):
         """
         Forward pass for training.
 
@@ -344,6 +352,8 @@ class Network(BaseNetwork):
             y_cond: Conditioning input
             mask: Optional mask for masked training
             noise: Optional pre-generated noise
+            pixel_weight: Optional per-pixel loss weight, e.g. for class-balanced
+                facies training. Broadcastable to y_0's shape.
 
         Returns:
             Training loss
@@ -371,22 +381,35 @@ class Network(BaseNetwork):
                 torch.cat([y_cond, y_noisy * mask + (1. - mask) * y_0], dim=1),
                 sample_gammas
             )
+            weight = mask * pixel_weight if pixel_weight is not None else None
             if self.predict_type == 'epsilon':
                 # Model predicts noise
-                loss = self.loss_fn(mask * noise, mask * model_output)
+                if weight is not None:
+                    loss = self._weighted_loss(mask * noise, mask * model_output, weight)
+                else:
+                    loss = self.loss_fn(mask * noise, mask * model_output)
             elif self.predict_type == 'x_start':
                 # Model predicts x_0 directly
-                loss = self.loss_fn(mask * y_0, mask * model_output)
+                if weight is not None:
+                    loss = self._weighted_loss(mask * y_0, mask * model_output, weight)
+                else:
+                    loss = self.loss_fn(mask * y_0, mask * model_output)
             else:
                 raise ValueError(f"Unknown predict_type: {self.predict_type}")
         else:
             model_output = self.denoise_fn(torch.cat([y_cond, y_noisy], dim=1), sample_gammas)
             if self.predict_type == 'epsilon':
                 # Model predicts noise
-                loss = self.loss_fn(noise, model_output)
+                if pixel_weight is not None:
+                    loss = self._weighted_loss(noise, model_output, pixel_weight)
+                else:
+                    loss = self.loss_fn(noise, model_output)
             elif self.predict_type == 'x_start':
                 # Model predicts x_0 directly
-                loss = self.loss_fn(y_0, model_output)
+                if pixel_weight is not None:
+                    loss = self._weighted_loss(y_0, model_output, pixel_weight)
+                else:
+                    loss = self.loss_fn(y_0, model_output)
             else:
                 raise ValueError(f"Unknown predict_type: {self.predict_type}")
         return loss

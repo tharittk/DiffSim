@@ -14,8 +14,9 @@
             4
         ],
         "attn_res": [
-            16
+            4
         ],
+        "_attn_res_note": "ds only reaches {1,2,4} for a 3-level UNet with image_size=64; attn_res=[16] never matched, leaving attention active only in the middle block. attn_res=[4] adds attention at the deepest reachable level (16x16); adding ds=2 (32x32) as well measured ~3.3x slower per training step and was not worth the cost.",
         "num_head_channels": 32,
         "res_blocks": 2,
         "dropout": 0.2,
@@ -61,11 +62,9 @@
             "num_workers": 8,
             "persistent_workers": true,
             "prefetch_factor": 4,
-            "sample_scale_weights": {
-                "local": 1.0,
-                "frame_128": 1.25,
-                "frame_256": 2.0
-            }
+            "class_balanced_loss": true,
+            "class_weight_sample_size": 4000,
+            "class_weight_power": 1.0
         },
         "output": {
             "results_dir": "/mnt/sda_data/tharitt/diffsim/results/case1_flumy_conditional",
