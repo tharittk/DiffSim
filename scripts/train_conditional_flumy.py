@@ -231,7 +231,7 @@ def main_worker(config_path, timestamp):
 
     # Optional: balance scenario sampling by (ng, isbx) from filename metadata.
     # This helps prevent degenerate predictions on low/high-end combinations.
-    balance_by_ng_isbx = train_cfg.get("balance_by_ng_isbx", True)
+    balance_by_ng_isbx = train_cfg.get("balance_by_ng_isbx", False)
     group_power = train_cfg.get("balance_group_power", 1.0)
     if balance_by_ng_isbx:
         sampler, group_counts = build_group_balanced_sampler(

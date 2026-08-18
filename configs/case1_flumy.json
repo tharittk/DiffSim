@@ -14,17 +14,12 @@
             4
         ],
         "attn_res": [
-            4
+            16
         ],
-        "_attn_res_note": "ds only reaches {1,2,4} for a 3-level UNet with image_size=64; attn_res=[16] never matched, leaving attention active only in the middle block. attn_res=[4] adds attention at the deepest reachable level (16x16); adding ds=2 (32x32) as well measured ~3.3x slower per training step and was not worth the cost.",
         "num_head_channels": 32,
         "res_blocks": 2,
         "dropout": 0.2,
         "predict_type": "epsilon",
-        "_predict_type_options": [
-            "epsilon",
-            "x_start"
-        ],
         "_conditioning_channels_note": "in_channel=2: [rms] + y_t",
         "beta_schedule": {
             "train": {
@@ -45,26 +40,13 @@
             "test_image": "/mnt/sda_data/tharitt/diffsim/data/slice_data_2d/test"
         },
         "training": {
-            "epochs": 250,
+            "epochs": 1000,
             "batch_size": 64,
             "lr": 5e-5,
             "loss": "mse",
             "ema_decay": 0.9999,
             "save_every": 10000,
-            "checkpoint_every": 50,
-            "balance_by_ng_isbx": true,
-            "balance_group_power": 1.0,
-            "deterministic": false,
-            "enable_tf32": true,
-            "cudnn_benchmark": true,
-            "amp": true,
-            "amp_dtype": "bfloat16",
-            "num_workers": 8,
-            "persistent_workers": true,
-            "prefetch_factor": 4,
-            "class_balanced_loss": true,
-            "class_weight_sample_size": 4000,
-            "class_weight_power": 1.0
+            "checkpoint_every": 50
         },
         "output": {
             "results_dir": "/mnt/sda_data/tharitt/diffsim/results/case1_flumy_conditional",
