@@ -31,14 +31,16 @@ RUN_TIMESTAMP = "20260818_102941"
 MODEL_DIR = Path("/mnt/sda_data/tharitt/diffsim/model/case1_flumy_conditional") / RUN_TIMESTAMP
 CONFIG_PATH = MODEL_DIR / "config.json"
 OUTPUT_DIR = Path("/mnt/sda_data/tharitt/diffsim/results") / f"arthit_inference_{RUN_TIMESTAMP}"
-H05_PATH = repo_root / "style-matching" / "h05_sub9"
+HORIZON_FILE = "h20_sub3"
+HORIZON_PATH = repo_root / "style-matching" / HORIZON_FILE
+HORIZON_TAG = HORIZON_PATH.stem
 
 if not MODEL_DIR.is_dir():
     raise FileNotFoundError(f"Model run directory not found: {MODEL_DIR}")
 if not CONFIG_PATH.is_file():
     raise FileNotFoundError(f"Model config not found: {CONFIG_PATH}")
-if not H05_PATH.is_file():
-    raise FileNotFoundError(f"h05 input file not found: {H05_PATH}")
+if not HORIZON_PATH.is_file():
+    raise FileNotFoundError(f"Horizon input file not found: {HORIZON_PATH}")
 
 CHECKPOINT_PATH = MODEL_DIR / "best_model.pth"
 if not CHECKPOINT_PATH.exists():
@@ -51,7 +53,7 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 PATCH_SIZE = 64
-PATCH_STRIDE = 32
+PATCH_STRIDE = 16
 SUBSAMPLE_FACTOR = 4
 CLIP_PERCENTILE = 99.5
 N_SAMPLES = 8
@@ -67,6 +69,7 @@ RUN_TAG = (
     f"sub{SUBSAMPLE_FACTOR}_p{PATCH_SIZE}_s{PATCH_STRIDE}"
     f"_samples{N_SAMPLES}_steps{DDIM_STEPS}_eta{ETA:g}"
 )
+RESULT_TAG = f"{HORIZON_TAG}_{RUN_TAG}"
 
 np.random.seed(SEED)
 torch.manual_seed(SEED)
@@ -78,7 +81,8 @@ print("=== FILE PARAMS:===")
 print("RUN_TIMESTAMP  :", RUN_TIMESTAMP)
 print("CONFIG_PATH    :", CONFIG_PATH)
 print("CHECKPOINT_PATH:", CHECKPOINT_PATH)
-print("H05_PATH       :", H05_PATH)
+print("HORIZON_PATH   :", HORIZON_PATH)
+print("HORIZON_TAG    :", HORIZON_TAG)
 print("OUTPUT_DIR     :", OUTPUT_DIR)
 print("DEVICE         :", DEVICE)
 print("BATCH_SIZE     :", BATCH_SIZE)
@@ -252,7 +256,7 @@ def infer_batch(network, normalized_patches, n_samples, ddim_steps, eta, device)
 
 
 def infer_tiles(network, tiles, output_dir, batch_size=16):
-    cache_label = f"{H05_PATH.name}_{RUN_TAG}"
+    cache_label = RESULT_TAG
     tile_dir = output_dir / "tiles" / cache_label
     tile_dir.mkdir(parents=True, exist_ok=True)
     results = []
@@ -261,7 +265,7 @@ def infer_tiles(network, tiles, output_dir, batch_size=16):
         batch_probabilities = [None] * len(batch_tiles)
         pending_indices, pending_patches = [], []
         for index, (row0, col0, normalized, valid, bounds) in enumerate(batch_tiles):
-            tile_path = tile_dir / f"tile_{RUN_TAG}_r{row0:04d}_c{col0:04d}.npz"
+            tile_path = tile_dir / f"tile_{RESULT_TAG}_r{row0:04d}_c{col0:04d}.npz"
             if tile_path.exists():
                 with np.load(tile_path) as cached:
                     batch_probabilities[index] = cached["probabilities"]
@@ -273,7 +277,7 @@ def infer_tiles(network, tiles, output_dir, batch_size=16):
             for index, probabilities in zip(pending_indices, inferred):
                 row0, col0, _, valid, bounds = batch_tiles[index]
                 np.savez_compressed(
-                    tile_dir / f"tile_{RUN_TAG}_r{row0:04d}_c{col0:04d}.npz",
+                    tile_dir / f"tile_{RESULT_TAG}_r{row0:04d}_c{col0:04d}.npz",
                     probabilities=probabilities,
                     valid=valid,
                     bounds=np.asarray(bounds),
@@ -310,7 +314,7 @@ def main():
     print(f"UNet channels: {config['conditional']['in_channel']} -> {config['conditional']['out_channel']}")
     print(f"Prediction target: {config['conditional'].get('predict_type', 'epsilon')}")
 
-    rms_grid, georef = load_h05_grid(H05_PATH)
+    rms_grid, georef = load_h05_grid(HORIZON_PATH)
     if SUBSAMPLE_FACTOR > 1:
         original_shape = rms_grid.shape
         rms_grid, georef = subsample_grid(rms_grid, georef, SUBSAMPLE_FACTOR)
@@ -318,7 +322,7 @@ def main():
 
     valid_grid = np.isfinite(rms_grid)
     if not valid_grid.any():
-        raise RuntimeError(f"No valid RMS values found in {H05_PATH}")
+        raise RuntimeError(f"No valid RMS values found in {HORIZON_PATH}")
 
     rms_clipped = rms_grid.copy()
     valid_values = rms_grid[valid_grid]
@@ -328,6 +332,7 @@ def main():
     print(f"Grid shape: {rms_grid.shape} (rows x cols)")
     print(f"Observed cells: {valid_grid.sum():,} / {valid_grid.size:,}")
     print(f"Amplitude clip: min={valid_values.min():.3f}, p{CLIP_PERCENTILE}={clip_high:.3f}")
+    print(f"Horizon file: {HORIZON_FILE}")
 
     all_tiles = build_tiles(rms_clipped, PATCH_SIZE, PATCH_STRIDE)
     if not all_tiles:
@@ -376,7 +381,7 @@ def main():
     print("Edge tests passed: partial borders, interior holes, bounds, masks, and probability sums are valid.")
 
     mode_label = "full" if RUN_FULL_MAP else "smoke"
-    output_path = OUTPUT_DIR / f"arthit_inference_{mode_label}_{RUN_TAG}.npz"
+    output_path = OUTPUT_DIR / f"arthit_inference_{HORIZON_TAG}_{mode_label}_{RUN_TAG}.npz"
     np.savez_compressed(
         output_path,
         probabilities=probability_maps,
