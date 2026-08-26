@@ -51,7 +51,7 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 PATCH_SIZE = 64
-PATCH_STRIDE = 64
+PATCH_STRIDE = 32
 SUBSAMPLE_FACTOR = 4
 CLIP_PERCENTILE = 99.5
 N_SAMPLES = 8
@@ -61,6 +61,12 @@ BATCH_SIZE = 16
 RUN_FULL_MAP = True
 SMOKE_MAX_PATCHES = 20
 SEED = 88
+
+# Identifies a tiling/sampling configuration in cache and output file names.
+RUN_TAG = (
+    f"sub{SUBSAMPLE_FACTOR}_p{PATCH_SIZE}_s{PATCH_STRIDE}"
+    f"_samples{N_SAMPLES}_steps{DDIM_STEPS}_eta{ETA:g}"
+)
 
 np.random.seed(SEED)
 torch.manual_seed(SEED)
@@ -78,9 +84,12 @@ print("DEVICE         :", DEVICE)
 print("BATCH_SIZE     :", BATCH_SIZE)
 print("===INFERENCE PARAMS===")
 print("SUBSAMPLE      :", SUBSAMPLE_FACTOR)
+print("PATCH_SIZE     :", PATCH_SIZE)
+print("PATCH_STRIDE   :", PATCH_STRIDE)
 print("N_SAMPLES      :", N_SAMPLES)
 print("DDIM_STEPS     :", DDIM_STEPS)
 print("ETA            :", ETA)
+print("RUN_TAG        :", RUN_TAG)
 print("Mode           :", "full h05 map" if RUN_FULL_MAP else f"smoke test ({SMOKE_MAX_PATCHES} patches)")
 
 
@@ -243,7 +252,7 @@ def infer_batch(network, normalized_patches, n_samples, ddim_steps, eta, device)
 
 
 def infer_tiles(network, tiles, output_dir, batch_size=16):
-    cache_label = f"{H05_PATH.name}_sub{SUBSAMPLE_FACTOR}_samples{N_SAMPLES}_steps{DDIM_STEPS}_eta{ETA:g}"
+    cache_label = f"{H05_PATH.name}_{RUN_TAG}"
     tile_dir = output_dir / "tiles" / cache_label
     tile_dir.mkdir(parents=True, exist_ok=True)
     results = []
@@ -252,7 +261,7 @@ def infer_tiles(network, tiles, output_dir, batch_size=16):
         batch_probabilities = [None] * len(batch_tiles)
         pending_indices, pending_patches = [], []
         for index, (row0, col0, normalized, valid, bounds) in enumerate(batch_tiles):
-            tile_path = tile_dir / f"tile_sub{SUBSAMPLE_FACTOR}_r{row0:04d}_c{col0:04d}.npz"
+            tile_path = tile_dir / f"tile_{RUN_TAG}_r{row0:04d}_c{col0:04d}.npz"
             if tile_path.exists():
                 with np.load(tile_path) as cached:
                     batch_probabilities[index] = cached["probabilities"]
@@ -264,7 +273,7 @@ def infer_tiles(network, tiles, output_dir, batch_size=16):
             for index, probabilities in zip(pending_indices, inferred):
                 row0, col0, _, valid, bounds = batch_tiles[index]
                 np.savez_compressed(
-                    tile_dir / f"tile_sub{SUBSAMPLE_FACTOR}_r{row0:04d}_c{col0:04d}.npz",
+                    tile_dir / f"tile_{RUN_TAG}_r{row0:04d}_c{col0:04d}.npz",
                     probabilities=probabilities,
                     valid=valid,
                     bounds=np.asarray(bounds),
@@ -367,8 +376,7 @@ def main():
     print("Edge tests passed: partial borders, interior holes, bounds, masks, and probability sums are valid.")
 
     mode_label = "full" if RUN_FULL_MAP else "smoke"
-    sampling_label = f"samples{N_SAMPLES}_steps{DDIM_STEPS}_eta{ETA:g}_sub{SUBSAMPLE_FACTOR}"
-    output_path = OUTPUT_DIR / f"arthit_inference_{mode_label}_{sampling_label}.npz"
+    output_path = OUTPUT_DIR / f"arthit_inference_{mode_label}_{RUN_TAG}.npz"
     np.savez_compressed(
         output_path,
         probabilities=probability_maps,
@@ -379,6 +387,8 @@ def main():
         y_affine=georef["y_affine"],
         facies_names=np.asarray(["shale", "sand", "silt"]),
         subsample_factor=SUBSAMPLE_FACTOR,
+        patch_size=PATCH_SIZE,
+        patch_stride=PATCH_STRIDE,
         n_samples=N_SAMPLES,
         ddim_steps=DDIM_STEPS,
         eta=ETA,
