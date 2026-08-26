@@ -213,7 +213,7 @@ class Diffusion:
         img = torch.randn(shape, device=device)
         imgs = []
 
-        for i in tqdm(reversed(range(0, self.timesteps)), desc='Sampling', total=self.timesteps):
+        for i in tqdm(reversed(range(0, self.timesteps)), desc='Sampling', total=self.timesteps, disable=True):
             img = self.p_sample(
                 model, img,
                 torch.full((b,), i, device=device, dtype=torch.long),

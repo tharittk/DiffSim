@@ -329,7 +329,7 @@ class Network(BaseNetwork):
         y_t = default(y_t, lambda: torch.randn_like(y_cond[:, :1, ...]))
         ret_arr = y_t
 
-        for i, step_idx in enumerate(tqdm(reversed(range(len(ddim_timesteps))), desc='DDIM Sampling', total=len(ddim_timesteps))):
+        for i, step_idx in enumerate(tqdm(reversed(range(len(ddim_timesteps))), desc='DDIM Sampling', total=len(ddim_timesteps), disable=True)):
             t = torch.full((b,), ddim_timesteps[step_idx], device=y_cond.device, dtype=torch.long)
             t_prev = torch.full((b,), ddim_timesteps[step_idx - 1] if step_idx > 0 else -1, device=y_cond.device, dtype=torch.long)
 
