@@ -31,7 +31,7 @@ RUN_TIMESTAMP = "20260818_102941"
 MODEL_DIR = Path("/mnt/sda_data/tharitt/diffsim/model/case1_flumy_conditional") / RUN_TIMESTAMP
 CONFIG_PATH = MODEL_DIR / "config.json"
 OUTPUT_DIR = Path("/mnt/sda_data/tharitt/diffsim/results") / f"arthit_inference_{RUN_TIMESTAMP}"
-HORIZON_FILE = "h20_sub3"
+HORIZON_FILE = "h05_sub12"
 HORIZON_PATH = repo_root / "style-matching" / HORIZON_FILE
 HORIZON_TAG = HORIZON_PATH.stem
 
@@ -63,6 +63,7 @@ BATCH_SIZE = 16
 RUN_FULL_MAP = True
 SMOKE_MAX_PATCHES = 20
 SEED = 88
+EXPORT_PETREL_PROBABILITIES = True
 
 # Identifies a tiling/sampling configuration in cache and output file names.
 RUN_TAG = (
@@ -307,6 +308,59 @@ def reconstruct(shape, inferred_tiles):
     return probability_maps, most_likely, weights
 
 
+def export_probability_maps_to_petrel(probability_maps, covered, georef, facies_names, output_dir, stem_prefix):
+    row_min = int(georef["row_min"])
+    col_min = int(georef["col_min"])
+    x_affine = np.asarray(georef["x_affine"], dtype=np.float64)
+    y_affine = np.asarray(georef["y_affine"], dtype=np.float64)
+
+    row_ids, col_ids = np.where(covered)
+    if len(row_ids) == 0:
+        raise RuntimeError("No covered cells available for Petrel probability export.")
+
+    rows = row_ids + row_min
+    cols = col_ids + col_min
+    x = x_affine[0] + x_affine[1] * cols + x_affine[2] * rows
+    y = y_affine[0] + y_affine[1] * cols + y_affine[2] * rows
+
+    grid_height, grid_width = covered.shape
+    x_min = float(np.nanmin(x))
+    x_max = float(np.nanmax(x))
+    y_min = float(np.nanmin(y))
+    y_max = float(np.nanmax(y))
+
+    exported_paths = []
+    for code, facies_name in enumerate(facies_names):
+        safe_name = str(facies_name).replace(" ", "_").lower()
+        export_path = output_dir / f"{stem_prefix}_prob_{safe_name}.txt"
+        z = probability_maps[code, row_ids, col_ids].astype(np.float64)
+        with open(export_path, "w", encoding="utf-8") as handle:
+            handle.write("# Type: scattered data\n")
+            handle.write("# Version: 6\n")
+            handle.write(f"# Description: Facies probability for {facies_name}\n")
+            handle.write("# Format: free\n")
+            handle.write("# Field: 1 x\n")
+            handle.write("# Field: 2 y\n")
+            handle.write("# Field: 3 z probability\n")
+            handle.write("# Field: 4 column\n")
+            handle.write("# Field: 5 row\n")
+            handle.write("# Projection: Local Rectangular\n")
+            handle.write("# Units: meters\n")
+            handle.write("# End:\n")
+            handle.write("# Information from grid:\n")
+            handle.write(f"# Grid_size: {grid_width} x {grid_height}\n")
+            handle.write(f"# Grid_space: {x_min:.6f},{y_max:.6f},{x_max:.6f},{y_min:.6f}\n")
+            handle.write("# Scattered data: Not_available\n")
+            handle.write("# Z_field: z\n")
+            handle.write("# Vertical_faults: Not_available\n")
+            handle.write("# History: Exported from DiffSim inference\n")
+            handle.write("# Z_units: probability\n")
+            for xi, yi, zi, ci, ri in zip(x, y, z, cols, rows):
+                handle.write(f"{xi:.6f} {yi:.6f} {zi:.6f} {int(ci)} {int(ri)}\n")
+        exported_paths.append(export_path)
+    return exported_paths
+
+
 def main():
     network, config = load_model(CONFIG_PATH, CHECKPOINT_PATH, DEVICE)
     print(f"Loaded: {CHECKPOINT_PATH}")
@@ -314,7 +368,9 @@ def main():
     print(f"UNet channels: {config['conditional']['in_channel']} -> {config['conditional']['out_channel']}")
     print(f"Prediction target: {config['conditional'].get('predict_type', 'epsilon')}")
 
-    rms_grid, georef = load_h05_grid(HORIZON_PATH)
+    rms_grid_full, georef_full = load_h05_grid(HORIZON_PATH)
+    input_observed_cells = int(np.isfinite(rms_grid_full).sum())
+    rms_grid, georef = rms_grid_full, georef_full
     if SUBSAMPLE_FACTOR > 1:
         original_shape = rms_grid.shape
         rms_grid, georef = subsample_grid(rms_grid, georef, SUBSAMPLE_FACTOR)
@@ -354,8 +410,14 @@ def main():
 
     probability_maps, most_likely, weights = reconstruct(rms_grid.shape, inferred_tiles)
     covered = weights > 0
+    covered_cells = int(covered.sum())
     print(f"Covered observed pixels: {covered.sum():,}")
     print("Predicted facies counts:", dict(zip(*np.unique(most_likely[covered], return_counts=True))))
+    print(
+        "Observed-cell reduction: "
+        f"{input_observed_cells:,} -> {covered_cells:,} "
+        f"(x{input_observed_cells / max(1, covered_cells):.2f})"
+    )
 
     synthetic = np.full((70, 75), np.nan, dtype=np.float32)
     synthetic[2:68, 3:73] = np.arange(66 * 70, dtype=np.float32).reshape(66, 70)
@@ -399,6 +461,21 @@ def main():
         eta=ETA,
     )
     print(f"Saved: {output_path}")
+
+    if EXPORT_PETREL_PROBABILITIES:
+        mode_label = "full" if RUN_FULL_MAP else "smoke"
+        petrel_prefix = f"petrel_{HORIZON_TAG}_{mode_label}_{RUN_TAG}"
+        petrel_paths = export_probability_maps_to_petrel(
+            probability_maps,
+            covered,
+            georef,
+            ["shale", "sand", "silt"],
+            OUTPUT_DIR,
+            petrel_prefix,
+        )
+        for petrel_path in petrel_paths:
+            print(f"Saved Petrel probability map: {petrel_path}")
+
     print("Inference complete.")
 
 

@@ -57,3 +57,5 @@ events.out.tfevents.*
 adhoc-analysis/
 
 revised_wells/
+h*_sub*
+out_petrel/
