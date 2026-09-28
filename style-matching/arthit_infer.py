@@ -24,6 +24,11 @@ if str(repo_root) not in sys.path:
 
 from diffsim.core.network import Network
 from diffsim.data.flumy_generator import denormalize_lithofacies
+from diffsim.data.style_match import (
+    build_reference_cdf,
+    histogram_match_rms,
+    load_seismic_rms_grid,
+)
 
 
 # Paths and settings
@@ -31,9 +36,12 @@ RUN_TIMESTAMP = "20260818_102941"
 MODEL_DIR = Path("/mnt/sda_data/tharitt/diffsim/model/case1_flumy_conditional") / RUN_TIMESTAMP
 CONFIG_PATH = MODEL_DIR / "config.json"
 OUTPUT_DIR = Path("/mnt/sda_data/tharitt/diffsim/results") / f"arthit_inference_{RUN_TIMESTAMP}"
-HORIZON_FILE = "h05_sub12"
-HORIZON_PATH = repo_root / "style-matching" / HORIZON_FILE
+HORIZON_FILE = "h05_rms_sub4"
+HORIZON_PATH = repo_root / "style-matching" / "alternative_sites" / HORIZON_FILE
 HORIZON_TAG = HORIZON_PATH.stem
+STYLE_REFERENCE_FILE = "h05_sub1"
+STYLE_REFERENCE_PATH = repo_root / "style-matching" / STYLE_REFERENCE_FILE
+STYLE_REFERENCE_TAG = STYLE_REFERENCE_PATH.stem
 
 if not MODEL_DIR.is_dir():
     raise FileNotFoundError(f"Model run directory not found: {MODEL_DIR}")
@@ -41,6 +49,8 @@ if not CONFIG_PATH.is_file():
     raise FileNotFoundError(f"Model config not found: {CONFIG_PATH}")
 if not HORIZON_PATH.is_file():
     raise FileNotFoundError(f"Horizon input file not found: {HORIZON_PATH}")
+if not STYLE_REFERENCE_PATH.is_file():
+    raise FileNotFoundError(f"Style reference file not found: {STYLE_REFERENCE_PATH}")
 
 CHECKPOINT_PATH = MODEL_DIR / "best_model.pth"
 if not CHECKPOINT_PATH.exists():
@@ -54,7 +64,7 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 PATCH_SIZE = 64
 PATCH_STRIDE = 16
-SUBSAMPLE_FACTOR = 4
+SUBSAMPLE_FACTOR = 2 # READT THIS: should end up dx,dy = 100x100 (the model was trained at this resolution)
 CLIP_PERCENTILE = 99.5
 N_SAMPLES = 8
 DDIM_STEPS = 100
@@ -68,6 +78,7 @@ EXPORT_PETREL_PROBABILITIES = True
 # Identifies a tiling/sampling configuration in cache and output file names.
 RUN_TAG = (
     f"sub{SUBSAMPLE_FACTOR}_p{PATCH_SIZE}_s{PATCH_STRIDE}"
+    f"_style{STYLE_REFERENCE_TAG}"
     f"_samples{N_SAMPLES}_steps{DDIM_STEPS}_eta{ETA:g}"
 )
 RESULT_TAG = f"{HORIZON_TAG}_{RUN_TAG}"
@@ -84,6 +95,7 @@ print("CONFIG_PATH    :", CONFIG_PATH)
 print("CHECKPOINT_PATH:", CHECKPOINT_PATH)
 print("HORIZON_PATH   :", HORIZON_PATH)
 print("HORIZON_TAG    :", HORIZON_TAG)
+print("STYLE_REFERENCE:", STYLE_REFERENCE_PATH)
 print("OUTPUT_DIR     :", OUTPUT_DIR)
 print("DEVICE         :", DEVICE)
 print("BATCH_SIZE     :", BATCH_SIZE)
@@ -209,7 +221,7 @@ def patch_origins(length, stride):
     return list(range(0, length, stride))
 
 
-def extract_edge_safe_patch(grid, row0, col0, patch_size=64):
+def extract_edge_safe_patch(grid, row0, col0, patch_size=64, ref_sorted_vals=None):
     height, width = grid.shape
     row1, col1 = min(row0 + patch_size, height), min(col0 + patch_size, width)
     patch = np.full((patch_size, patch_size), np.nan, dtype=np.float32)
@@ -217,6 +229,9 @@ def extract_edge_safe_patch(grid, row0, col0, patch_size=64):
     valid = np.isfinite(patch)
     if not valid.any():
         return None
+
+    if ref_sorted_vals is not None:
+        patch[valid] = histogram_match_rms(patch[valid], ref_sorted_vals)
 
     nearest_indices = distance_transform_edt(~valid, return_distances=False, return_indices=True)
     filled = patch[tuple(nearest_indices)]
@@ -229,11 +244,13 @@ def extract_edge_safe_patch(grid, row0, col0, patch_size=64):
     return normalized, valid, (row1, col1)
 
 
-def build_tiles(grid, patch_size=64, stride=64):
+def build_tiles(grid, patch_size=64, stride=64, ref_sorted_vals=None):
     tiles = []
     for row0 in patch_origins(grid.shape[0], stride):
         for col0 in patch_origins(grid.shape[1], stride):
-            extracted = extract_edge_safe_patch(grid, row0, col0, patch_size)
+            extracted = extract_edge_safe_patch(
+                grid, row0, col0, patch_size, ref_sorted_vals
+            )
             if extracted is not None:
                 tiles.append((row0, col0, *extracted))
     return tiles
@@ -368,6 +385,14 @@ def main():
     print(f"UNet channels: {config['conditional']['in_channel']} -> {config['conditional']['out_channel']}")
     print(f"Prediction target: {config['conditional'].get('predict_type', 'epsilon')}")
 
+    reference_grid = load_seismic_rms_grid(STYLE_REFERENCE_PATH)
+    ref_sorted_vals = build_reference_cdf(reference_grid)
+    print(
+        f"Style reference: {STYLE_REFERENCE_PATH} "
+        f"({len(ref_sorted_vals):,} values, "
+        f"range {ref_sorted_vals[0]:.3f}-{ref_sorted_vals[-1]:.3f})"
+    )
+
     rms_grid_full, georef_full = load_h05_grid(HORIZON_PATH)
     input_observed_cells = int(np.isfinite(rms_grid_full).sum())
     rms_grid, georef = rms_grid_full, georef_full
@@ -390,7 +415,9 @@ def main():
     print(f"Amplitude clip: min={valid_values.min():.3f}, p{CLIP_PERCENTILE}={clip_high:.3f}")
     print(f"Horizon file: {HORIZON_FILE}")
 
-    all_tiles = build_tiles(rms_clipped, PATCH_SIZE, PATCH_STRIDE)
+    all_tiles = build_tiles(
+        rms_clipped, PATCH_SIZE, PATCH_STRIDE, ref_sorted_vals
+    )
     if not all_tiles:
         raise RuntimeError("No tiles available for inference.")
     if RUN_FULL_MAP:
@@ -459,6 +486,7 @@ def main():
         n_samples=N_SAMPLES,
         ddim_steps=DDIM_STEPS,
         eta=ETA,
+        style_reference=STYLE_REFERENCE_FILE,
     )
     print(f"Saved: {output_path}")
 
