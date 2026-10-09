@@ -35,9 +35,9 @@ from diffsim.data.style_match import (
 RUN_TIMESTAMP = "20260818_102941"
 MODEL_DIR = Path("/mnt/sda_data/tharitt/diffsim/model/case1_flumy_conditional") / RUN_TIMESTAMP
 CONFIG_PATH = MODEL_DIR / "config.json"
-OUTPUT_DIR = Path("/mnt/sda_data/tharitt/diffsim/results") / f"arthit_inference_{RUN_TIMESTAMP}"
-HORIZON_FILE = "h05_rms_sub4"
-HORIZON_PATH = repo_root / "style-matching" / "alternative_sites" / HORIZON_FILE
+OUTPUT_DIR = Path("/mnt/sda_data/tharitt/diffsim/results") / f"eval_karawake_{RUN_TIMESTAMP}"
+HORIZON_FILE = "seq2-rms"
+HORIZON_PATH = repo_root / "style-matching" / "eval-karawake" / HORIZON_FILE
 HORIZON_TAG = HORIZON_PATH.stem
 STYLE_REFERENCE_FILE = "h05_sub1"
 STYLE_REFERENCE_PATH = repo_root / "style-matching" / STYLE_REFERENCE_FILE
